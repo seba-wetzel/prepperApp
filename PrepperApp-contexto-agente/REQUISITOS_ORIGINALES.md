@@ -1,6 +1,8 @@
-# PrepperApp: contexto y especificación para continuar en Codex
+# PrepperApp: requisitos originales e historial
 
-Fecha: 17 de noviembre de 2026.
+> Documento histórico del 17 de noviembre de 2026. Describe el punto de partida anterior a la implementación y contiene afirmaciones que ya no son vigentes. Para retomar el proyecto, empezar por `README.md` y `ESTADO_ACTUAL.md`.
+
+Fecha original: 17 de noviembre de 2026.
 
 ## 1. Punto de partida y encargo
 
