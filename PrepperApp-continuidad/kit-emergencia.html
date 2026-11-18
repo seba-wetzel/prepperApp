@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14213d">
+<title>Mi kit de emergencia</title>
+<style>
+:root {
+  --bg: #eef1f4; --surface: #ffffff; --ink: #14213d; --muted: #5d6b82; --line: #d9dfe7;
+  --accent: #e2570f; --accent-ink: #ffffff;
+  --ok: #1f8a4c; --ok-soft: #e1f3e8; --warn: #b7791f; --warn-soft: #fbf0d9; --bad: #c53030; --bad-soft: #fbe3e3;
+  --display: "Arial Narrow", "Roboto Condensed", system-ui, -apple-system, sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1522; --surface: #172133; --ink: #e8edf5; --muted: #95a3ba; --line: #26334a;
+    --accent: #ff7a33; --accent-ink: #1a0d04;
+    --ok: #4cc983; --ok-soft: #173326; --warn: #e8b04a; --warn-soft: #3a2e14; --bad: #f07070; --bad-soft: #3d1c1f;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 17px/1.4 var(--body); display: flex; flex-direction: column; -webkit-tap-highlight-color: transparent; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+header { padding: calc(env(safe-area-inset-top) + 14px) 18px 10px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+header h1 { font: 800 1.35rem/1.1 var(--display); margin: 0; }
+.sync { font-size: .75rem; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+.sync.off i { background: var(--bad); }
+.banner { background: var(--bad-soft); color: var(--bad); font-size: .88rem; padding: 10px 16px; display: none; }
+.banner.on { display: block; }
+
+main { flex: 1; overflow-y: auto; padding: 16px 16px 24px; }
+.view { display: none; flex-direction: column; gap: 14px; max-width: 560px; margin: 0 auto; }
+.view.active { display: flex; }
+h2 { font: 800 1.1rem/1.2 var(--display); margin: 6px 0 0; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+
+.gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gauge { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px; border-top: 5px solid var(--state, var(--muted)); }
+.gauge .lab { font-size: .85rem; color: var(--muted); font-weight: 700; }
+.gauge .num { font: 800 2.4rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.gauge .num small { font-size: .95rem; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.gauge .goal { font-size: .8rem; color: var(--muted); }
+.track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.track > div { height: 100%; background: var(--state, var(--accent)); border-radius: 4px; }
+
+.rowlink { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; text-align: left; }
+.rowlink b { font-family: var(--display); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.rowlink .t { display: flex; flex-direction: column; }
+.rowlink .t span { color: var(--muted); font-size: .85rem; }
+.chev { color: var(--muted); font-size: 1.3rem; }
+
+.mini { display: flex; flex-direction: column; }
+.mini > div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: .95rem; }
+.mini > div:first-child { border-top: none; padding-top: 0; }
+.empty { color: var(--muted); font-size: .95rem; }
+
+.chip { display: inline-block; font-size: .75rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px; }
+.seg button { border: 0; background: none; padding: 9px 4px; border-radius: 9px; font-size: .9rem; font-weight: 700; color: var(--muted); }
+.seg button.on { background: var(--ink); color: var(--surface); }
+.item { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--state); border-radius: 14px; padding: 12px 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.item .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.item .name { font-weight: 700; }
+.item .sub { font-size: .82rem; color: var(--muted); }
+.item .ctrl { display: flex; align-items: center; gap: 10px; }
+.stepper { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.stepper button { width: 46px; height: 44px; border: 0; background: var(--bg); font-size: 1.4rem; font-weight: 700; }
+.stepper input { width: 64px; height: 44px; border: 0; text-align: center; background: var(--surface); font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.of { font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums; flex: 1; }
+.exp { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); flex-wrap: wrap; }
+.exp input { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; background: var(--surface); font-size: .85rem; }
+.del { border: 0; background: none; color: var(--muted); font-size: .8rem; text-decoration: underline; padding: 4px; }
+
+.btn { border: 0; border-radius: 12px; padding: 13px 16px; font-weight: 700; background: var(--accent); color: var(--accent-ink); width: 100%; display: block; text-align: center; }
+.btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn.danger { background: var(--bad); color: #fff; }
+
+form.add { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+form.add label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--muted); font-weight: 700; }
+form.add label.full { grid-column: 1 / -1; }
+form.add input { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--surface); font-size: 1rem; font-weight: 400; color: var(--ink); }
+
+.freq { display: flex; justify-content: space-between; align-items: baseline; }
+.freq span { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.task { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.box { width: 28px; height: 28px; border-radius: 8px; border: 2px solid var(--line); flex-shrink: 0; display: grid; place-items: center; font-weight: 800; margin-top: 1px; }
+.task.done .box { background: var(--ok); border-color: var(--ok); color: #fff; }
+.task.due .box { border-color: var(--accent); }
+.task .tx { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.task.done .tx > span:first-child { color: var(--muted); }
+
+.set { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.set:first-child { border-top: none; padding-top: 0; }
+.set .t { display: flex; flex-direction: column; }
+.set .t span { font-size: .8rem; color: var(--muted); }
+.note { font-size: .88rem; color: var(--muted); margin: 0; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+
+nav { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+nav button { border: 0; background: none; padding: 10px 2px 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .75rem; font-weight: 700; color: var(--muted); position: relative; }
+nav button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+nav button.on { color: var(--accent); }
+nav .badge { position: absolute; top: 5px; left: calc(50% + 6px); background: var(--bad); color: #fff; font-size: .65rem; border-radius: 999px; padding: 1px 6px; }
+
+.modal { position: fixed; inset: 0; background: rgba(10,15,25,.5); display: none; align-items: flex-end; justify-content: center; padding: 16px; z-index: 10; }
+.modal.on { display: flex; }
+.modal .card { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
+.modal textarea { width: 100%; min-height: 220px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg); font-size: .9rem; }
+.toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; font-size: .9rem; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+.toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mi kit de emergencia</h1>
+  <div class="sync" id="sync"><i></i><span>Sin internet</span></div>
+</header>
+<div class="banner" id="banner">Este navegador no está guardando los datos. Abrí el archivo con Chrome (Android) o Safari (iPhone), y usá la copia de seguridad en Ajustes.</div>
+
+<main>
+  <section class="view active" id="v-inicio">
+    <div class="gauges">
+      <div class="gauge" id="g-food"></div>
+      <div class="gauge" id="g-water"></div>
+    </div>
+    <button class="rowlink" id="go-shop" type="button"></button>
+    <button class="rowlink" id="go-tasks" type="button"></button>
+    <h2>Vencen pronto</h2>
+    <div class="card"><div class="mini" id="soon"></div></div>
+    <p class="note" id="backup-note"></p>
+  </section>
+
+  <section class="view" id="v-despensa">
+    <div class="seg" id="filter">
+      <button type="button" data-f="todo" class="on">Todo</button>
+      <button type="button" data-f="falta">Para comprar</button>
+      <button type="button" data-f="vence">Vence pronto</button>
+    </div>
+    <div id="pantry" class="stack" style="gap:12px"></div>
+    <button class="btn ghost" type="button" id="copy-list">Compartir lista de compras</button>
+    <button class="btn ghost" type="button" id="open-add">Agregar producto</button>
+  </section>
+
+  <section class="view" id="v-tareas">
+    <div id="tasks" class="stack" style="gap:12px"></div>
+  </section>
+
+  <section class="view" id="v-ajustes">
+    <div class="card">
+      <div class="set"><div class="t"><b>Personas</b><span>Integrantes del hogar</span></div><div class="stepper" data-k="personas"><button type="button" aria-label="Menos">−</button><input id="s-personas" inputmode="numeric" type="number"><button type="button" aria-label="Más">+</button></div></div>
+      <div class="set"><div class="t"><b>Semanas</b><span>Autonomía objetivo</span></div><div class="stepper" data-k="semanas"><button type="button" aria-label="Menos">−</button><input id="s-semanas" inputmode="numeric" type="number"><button type="button" aria-label="Más">+</button></div></div>
+      <div class="set"><div class="t"><b>Kcal diarias</b><span>Promedio por persona</span></div><div class="stepper" data-k="kcal"><button type="button" aria-label="Menos">−</button><input id="s-kcal" inputmode="numeric" type="number"><button type="button" aria-label="Más">+</button></div></div>
+    </div>
+    <p class="note">El agua se calcula a 4 litros por persona por día. Las cantidades de cada producto se ajustan solas cuando cambiás personas o semanas.</p>
+
+    <h2>Copia de seguridad</h2>
+    <div class="card stack">
+      <p class="note">Los datos viven solo en este celular, dentro del navegador. Si borrás el historial o los datos del navegador, se pierden. Guardá una copia cada tanto y mandátela por WhatsApp o mail.</p>
+      <button class="btn" type="button" id="export">Guardar copia de seguridad</button>
+      <label class="btn ghost" for="import-file">Restaurar desde una copia</label>
+      <input type="file" id="import-file" accept=".json,application/json,text/plain" hidden>
+    </div>
+    <button class="btn ghost" type="button" id="reset">Borrar todos los datos</button>
+  </section>
+</main>
+
+<nav id="tabs">
+  <button type="button" data-v="inicio" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+  <button type="button" data-v="despensa"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16"/></svg>Despensa<span class="badge" id="b-shop" hidden></span></button>
+  <button type="button" data-v="tareas"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>Tareas<span class="badge" id="b-tasks" hidden></span></button>
+  <button type="button" data-v="ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Ajustes</button>
+</nav>
+
+<div class="modal" id="m-add">
+  <div class="card">
+    <h2 style="margin:0">Agregar producto</h2>
+    <form class="add" id="f-add">
+      <label class="full" for="a-name">Nombre<input id="a-name" required></label>
+      <label for="a-unit">Unidad<input id="a-unit" placeholder="latas, kg, litros" required></label>
+      <label for="a-week">Por semana (5 personas)<input id="a-week" type="number" step="0.1" min="0" inputmode="decimal" required></label>
+      <label for="a-kcal">Kcal por unidad<input id="a-kcal" type="number" min="0" inputmode="numeric" value="0"></label>
+      <label for="a-step">Sumar de a<input id="a-step" type="number" step="0.1" min="0.1" inputmode="decimal" value="1"></label>
+      <button class="btn ghost" type="button" id="a-cancel">Cancelar</button>
+      <button class="btn" type="submit">Agregar</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="m-reset">
+  <div class="card">
+    <h2 style="margin:0">¿Borrar todo?</h2>
+    <p class="note">Se pierden el stock cargado, las fechas de vencimiento, los productos agregados y el historial de tareas.</p>
+    <button class="btn danger" type="button" id="r-yes">Sí, borrar todo</button>
+    <button class="btn ghost" type="button" id="r-no">Cancelar</button>
+  </div>
+</div>
+
+<div class="modal" id="m-import">
+  <div class="card">
+    <h2 style="margin:0">¿Restaurar la copia?</h2>
+    <p class="note" id="i-info"></p>
+    <button class="btn" type="button" id="i-yes">Sí, reemplazar</button>
+    <button class="btn ghost" type="button" id="i-no">Cancelar</button>
+  </div>
+</div>
+
+<div class="modal" id="m-text">
+  <div class="card">
+    <h2 style="margin:0" id="t-title">Lista de compras</h2>
+    <p class="note">Mantené apretado el texto para seleccionarlo y copiarlo.</p>
+    <textarea id="t-area" readonly></textarea>
+    <button class="btn ghost" type="button" id="t-close">Cerrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE_ITEMS = [
+  ["agua","Agua","litros","Agua",140,0,5,"4 L por persona por día. Si es de red, cambiarla cada 6 meses"],
+  ["arroz","Arroz","kg","Base",2,3600,0.5,"Frasco o tacho hermético"],
+  ["fideos","Fideos secos","kg","Base",2.5,3500,0.5,""],
+  ["polenta","Polenta","kg","Base",1,3600,0.5,"Cocción rápida, gasta poco gas"],
+  ["legsecas","Lentejas o porotos secos","kg","Base",1,3400,0.5,"Cocción larga"],
+  ["avena","Avena","kg","Base",1,3800,0.5,"Se come sin cocción"],
+  ["harina","Harina","kg","Base",1,3600,1,""],
+  ["leglata","Legumbres en lata","latas","Lista para comer",6,300,1,"Preferir abrefácil"],
+  ["atun","Atún o caballa en lata","latas","Proteínas",8,200,1,""],
+  ["carne","Carne o picadillo en lata","latas","Proteínas",4,350,1,""],
+  ["leche","Leche en polvo","kg","Proteínas",2,4900,0.5,"Rinde unos 8 L por kg"],
+  ["mani","Mantequilla de maní","frascos 350 g","Proteínas",1,2100,1,""],
+  ["aceite","Aceite","litros","Grasas",1,8800,0.5,"Lejos de la luz"],
+  ["frutos","Frutos secos","kg","Grasas",0.5,6000,0.25,"Se ponen rancios: rotar seguido"],
+  ["galle","Galletitas","paquetes 300 g","Lista para comer",6,1350,1,""],
+  ["barras","Barras de cereal","unidades","Lista para comer",15,100,1,""],
+  ["fruta","Fruta en almíbar","latas","Lista para comer",4,300,1,""],
+  ["tomate","Tomate triturado","cajas 520 g","Vegetales",4,120,1,""],
+  ["choclo","Choclo o arvejas en lata","latas","Vegetales",6,200,1,""],
+  ["azucar","Azúcar","kg","Despensa",1,4000,1,""],
+  ["dulce","Dulce de leche o mermelada","frascos 400 g","Despensa",1,1200,1,""],
+  ["sal","Sal","kg","Despensa",0.5,0,0.5,""],
+  ["caldo","Caldo en cubos","cajas","Despensa",1,0,1,""],
+  ["yerba","Yerba","kg","Despensa",1,0,0.5,""],
+  ["cafe","Café o té","paquetes","Despensa",1,0,1,""]
+].map(([id,name,unit,cat,week,kcal,step,note]) => ({id,name,unit,cat,week,kcal,step,note}));
+
+const TASKS = [
+  {f:"Semanal", days:7, items:[["s1","Cargar powerbank y celulares"],["s2","Tanque de nafta del auto por encima de la mitad"],["s3","Revisar pronóstico extendido y alertas del SMN"]]},
+  {f:"Mensual", days:30, items:[["m1","Probar linternas, radio y anafe (encenderlos)"],["m2","Controlar las pilas"],["m3","Reponer medicación habitual del botiquín"],["m4","Revisar mochilas de evacuación: que no falte nada"]]},
+  {f:"Trimestral", days:91, items:[["t1","Rotar comida: consumir lo que vence en 3 meses y reponer"],["t2","Controlar vencimientos del botiquín"],["t3","Revisar bidones: fisuras, olor o algas"],["t4","Práctica familiar: punto de encuentro y quién lleva cada mochila"]]},
+  {f:"Semestral", days:182, items:[["h1","Cambiar agua de red y lavar bidones con lavandina diluida"],["h2","Cambiar ropa de las mochilas según estación y talles"],["h3","Actualizar teléfonos útiles y copias de documentos"],["h4","Renovar el efectivo de reserva"]]},
+  {f:"Anual", days:365, items:[["a1","Reemplazar todas las pilas del stock"],["a2","Revisar cartuchos de gas: óxido o pérdidas"],["a3","Revisar el plan completo: casa, familia, salud, trabajo"],["a4","Revisar mantas térmicas y bolsas herméticas"]]}
+];
+
+const KEY = "mi-kit-emergencia-offline-v1";
+const fresh = () => ({ v:1, updatedAt:0, lastBackup:0, settings:{personas:5, semanas:2, kcal:1900}, stock:{}, custom:[], tasks:{} });
+let S = fresh();
+let storageOK = true;
+try {
+  localStorage.setItem(KEY + "-test", "1"); localStorage.removeItem(KEY + "-test");
+  const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw));
+} catch(e) { storageOK = false; }
+
+let filter = "todo";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+const fmt = n => (Math.round(n * 10) / 10).toLocaleString("es-AR");
+const items = () => BASE_ITEMS.concat(S.custom || []);
+const isCount = u => !/^(kg|litros|l)$/i.test(u.trim());
+function goal(it) {
+  const raw = it.week * S.settings.personas / 5 * S.settings.semanas;
+  return isCount(it.unit) ? Math.ceil(raw - 1e-9) : Math.ceil(raw * 10 - 1e-9) / 10;
+}
+const qty = id => (S.stock[id] && +S.stock[id].q) || 0;
+const expOf = id => (S.stock[id] && S.stock[id].exp) || "";
+function expState(id) {
+  const e = expOf(id); if (!e || !qty(id)) return null;
+  const d = daysBetween(todayISO(), e);
+  if (d < 0) return {cls:"bad", txt:"Vencido", d};
+  if (d <= 60) return {cls:"warn", txt: d === 0 ? "Vence hoy" : "Vence en " + d + " d", d};
+  return {cls:"ok", txt:"Vence " + e.split("-").reverse().join("/"), d};
+}
+function itemState(it) {
+  const g = goal(it), q = qty(it.id);
+  if (g <= 0 || q >= g) return "ok";
+  return q > 0 ? "warn" : "bad";
+}
+function taskState(id, days) {
+  const t = S.tasks[id];
+  if (!t || !t.last) return {done:false, chip:"bad", txt:"Nunca hecha"};
+  const ago = daysBetween(t.last, todayISO());
+  if (ago < days) {
+    const left = days - ago;
+    return {done:true, chip:"ok", txt: (ago === 0 ? "Hecha hoy" : "Hecha hace " + ago + " d") + " · vuelve en " + left + " d"};
+  }
+  const late = ago - days;
+  return {done:false, chip: late > 7 ? "bad" : "warn", txt: late === 0 ? "Toca hoy" : "Atrasada " + late + " d"};
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2200); }
+function showText(title, text) { $("t-title").textContent = title; $("t-area").value = text; $("m-text").classList.add("on"); }
+
+function save() {
+  S.updatedAt = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); storageOK = true; } catch(e) { storageOK = false; }
+  setStatus();
+}
+function setStatus() {
+  $("sync").classList.toggle("off", !storageOK);
+  $("sync").querySelector("span").textContent = storageOK ? "Guardado en este celu" : "No se guarda";
+  $("banner").classList.toggle("on", !storageOK);
+  const n = $("backup-note");
+  if (!S.updatedAt) { n.textContent = ""; return; }
+  if (!S.lastBackup) n.textContent = "Todavía no guardaste una copia de seguridad. Hacelo desde Ajustes.";
+  else {
+    const d = Math.floor((Date.now() - S.lastBackup) / 86400000);
+    n.textContent = d > 30 ? "Tu última copia de seguridad tiene " + d + " días. Conviene hacer una nueva desde Ajustes." : "";
+  }
+}
+
+function render() { renderHome(); renderPantry(); renderTasks(); renderSettings(); setStatus(); }
+
+function gaugeHTML(label, days, target, unit) {
+  const pct = Math.min(100, target ? days / target * 100 : 0);
+  const st = pct >= 100 ? "var(--ok)" : pct >= 40 ? "var(--warn)" : "var(--bad)";
+  return { st, html: `<span class="lab">${label}</span><span class="num">${fmt(days)}<small>${unit}</small></span>
+    <div class="track"><div style="width:${pct}%"></div></div><span class="goal">Meta: ${target} días</span>` };
+}
+function renderHome() {
+  const s = S.settings, target = s.semanas * 7;
+  let kcal = 0; items().forEach(it => kcal += qty(it.id) * (it.kcal || 0));
+  const foodDays = kcal / (s.personas * s.kcal || 1);
+  const waterDays = qty("agua") / (s.personas * 4 || 1);
+  const f = gaugeHTML("Comida", Math.floor(foodDays * 10) / 10, target, "días");
+  const w = gaugeHTML("Agua", Math.floor(waterDays * 10) / 10, target, "días");
+  $("g-food").innerHTML = f.html; $("g-food").style.setProperty("--state", f.st);
+  $("g-water").innerHTML = w.html; $("g-water").style.setProperty("--state", w.st);
+
+  const missing = items().filter(it => itemState(it) !== "ok").length;
+  $("go-shop").innerHTML = `<div class="t"><strong>Para comprar</strong><span>${missing ? "Productos por debajo de la meta" : "Todo el stock está completo"}</span></div><b>${missing}</b><span class="chev">›</span>`;
+  let pending = 0; TASKS.forEach(g => g.items.forEach(([id]) => { if (!taskState(id, g.days).done) pending++; }));
+  $("go-tasks").innerHTML = `<div class="t"><strong>Tareas pendientes</strong><span>${pending ? "Mantenimiento que toca ahora" : "Todo al día"}</span></div><b>${pending}</b><span class="chev">›</span>`;
+  const sb = $("b-shop"), tb = $("b-tasks");
+  sb.hidden = !missing; sb.textContent = missing; tb.hidden = !pending; tb.textContent = pending;
+
+  const soon = items().map(it => ({it, e: expState(it.id)})).filter(x => x.e && x.e.d <= 60).sort((a,b) => a.e.d - b.e.d);
+  $("soon").innerHTML = soon.length
+    ? soon.slice(0,6).map(x => `<div><span>${esc(x.it.name)}</span><span class="chip ${x.e.cls}">${x.e.txt}</span></div>`).join("")
+    : `<p class="empty" style="margin:0">Nada vence en los próximos 60 días. Cargá las fechas en la despensa para seguirlas acá.</p>`;
+}
+
+function renderPantry() {
+  document.querySelectorAll("#filter button").forEach(b => b.classList.toggle("on", b.dataset.f === filter));
+  let list = items();
+  if (filter === "falta") list = list.filter(it => itemState(it) !== "ok");
+  if (filter === "vence") list = list.filter(it => { const e = expState(it.id); return e && e.d <= 60; });
+  if (!list.length) {
+    $("pantry").innerHTML = `<div class="card empty">${filter === "falta" ? "No falta nada: el stock cubre la meta." : "Nada vence en los próximos 60 días."}</div>`;
+    return;
+  }
+  let html = "", cat = null;
+  list.forEach(it => {
+    if (it.cat !== cat) { cat = it.cat; html += `<h2>${esc(cat)}</h2>`; }
+    const g = goal(it), q = qty(it.id), st = itemState(it), e = expState(it.id);
+    const color = st === "ok" ? "var(--ok)" : st === "warn" ? "var(--warn)" : "var(--bad)";
+    const chip = st === "ok" ? `<span class="chip ok">Completo</span>` : `<span class="chip ${st}">Faltan ${fmt(Math.max(0, g - q))}</span>`;
+    html += `<div class="item" style="--state:${color}" data-id="${it.id}">
+      <div class="top"><div><div class="name">${esc(it.name)}</div><div class="sub">${esc(it.unit)}${it.note ? " · " + esc(it.note) : ""}</div></div>${chip}</div>
+      <div class="ctrl">
+        <div class="stepper"><button type="button" data-a="minus" aria-label="Restar">−</button><input type="number" inputmode="decimal" step="any" min="0" value="${q || ""}" placeholder="0" aria-label="Stock de ${esc(it.name)}"><button type="button" data-a="plus" aria-label="Sumar">+</button></div>
+        <span class="of">de ${fmt(g)} ${esc(it.unit)}</span>
+      </div>
+      <div class="exp"><label for="e-${it.id}">Vence</label><input id="e-${it.id}" type="date" value="${expOf(it.id)}">${e ? `<span class="chip ${e.cls}">${e.cls === "ok" ? "OK" : e.txt}</span>` : ""}${it.custom ? `<button type="button" class="del" data-a="del">Quitar producto</button>` : ""}</div>
+    </div>`;
+  });
+  $("pantry").innerHTML = html;
+}
+
+function renderTasks() {
+  $("tasks").innerHTML = TASKS.map(g => {
+    const states = g.items.map(([id, txt]) => ({id, txt, s: taskState(id, g.days)}));
+    const done = states.filter(x => x.s.done).length;
+    return `<div class="freq"><h2>${g.f}</h2><span>${done}/${states.length} al día</span></div>` +
+      states.map(x => `<button type="button" class="task ${x.s.done ? "done" : "due"}" data-t="${x.id}">
+        <span class="box">${x.s.done ? "✓" : ""}</span>
+        <span class="tx"><span>${esc(x.txt)}</span><span><span class="chip ${x.s.chip}">${x.s.txt}</span></span></span>
+      </button>`).join("");
+  }).join("");
+}
+
+function renderSettings() {
+  $("s-personas").value = S.settings.personas;
+  $("s-semanas").value = S.settings.semanas;
+  $("s-kcal").value = S.settings.kcal;
+}
+
+function show(v) {
+  document.querySelectorAll(".view").forEach(x => x.classList.toggle("active", x.id === "v-" + v));
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  document.querySelector("main").scrollTop = 0;
+}
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) show(b.dataset.v); });
+$("go-shop").onclick = () => { filter = "falta"; renderPantry(); show("despensa"); };
+$("go-tasks").onclick = () => show("tareas");
+$("filter").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { filter = b.dataset.f; renderPantry(); } });
+
+function setQty(id, v) {
+  v = Math.max(0, Math.round(v * 100) / 100);
+  S.stock[id] = Object.assign({}, S.stock[id], {q: v});
+  save(); render();
+}
+$("pantry").addEventListener("click", e => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const id = b.closest(".item").dataset.id;
+  const it = items().find(x => x.id === id);
+  if (b.dataset.a === "plus") setQty(id, qty(id) + (it.step || 1));
+  if (b.dataset.a === "minus") setQty(id, qty(id) - (it.step || 1));
+  if (b.dataset.a === "del") { S.custom = S.custom.filter(x => x.id !== id); delete S.stock[id]; save(); render(); toast("Producto quitado"); }
+});
+$("pantry").addEventListener("change", e => {
+  const card = e.target.closest(".item"); if (!card) return;
+  const id = card.dataset.id;
+  if (e.target.type === "date") { S.stock[id] = Object.assign({}, S.stock[id], {exp: e.target.value}); save(); render(); }
+  else { const v = parseFloat(String(e.target.value).replace(",", ".")); setQty(id, isNaN(v) ? 0 : v); }
+});
+$("copy-list").onclick = async () => {
+  const lines = items().filter(it => itemState(it) !== "ok").map(it => `- ${it.name}: ${fmt(Math.max(0, goal(it) - qty(it.id)))} ${it.unit}`);
+  const text = lines.length ? "Lista de compras (kit de emergencia)\n" + lines.join("\n") : "No falta nada.";
+  if (navigator.share) { try { await navigator.share({ text }); return; } catch(err) { if (err && err.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(text); toast("Lista copiada"); } catch(err) { showText("Lista de compras", text); }
+};
+
+$("tasks").addEventListener("click", e => {
+  const b = e.target.closest("button[data-t]"); if (!b) return;
+  const id = b.dataset.t, g = TASKS.find(g => g.items.some(([i]) => i === id));
+  const st = taskState(id, g.days), t = S.tasks[id] || {};
+  if (st.done && t.last === todayISO()) S.tasks[id] = {last: t.prev || null, prev: null};
+  else if (st.done) { toast("Ya está al día. Se desmarca solo si la marcaste hoy."); return; }
+  else S.tasks[id] = {last: todayISO(), prev: t.last || null};
+  save(); render();
+});
+
+const LIMITS = {personas:[1,30,1], semanas:[1,52,1], kcal:[1000,3500,100]};
+document.querySelectorAll("#v-ajustes .stepper").forEach(st => {
+  const k = st.dataset.k, [min,max,step] = LIMITS[k], inp = st.querySelector("input");
+  const setv = v => { v = Math.min(max, Math.max(min, Math.round(v))); S.settings[k] = v; save(); render(); };
+  st.querySelectorAll("button")[0].onclick = () => setv(S.settings[k] - step);
+  st.querySelectorAll("button")[1].onclick = () => setv(S.settings[k] + step);
+  inp.onchange = () => { const v = parseInt(inp.value, 10); if (!isNaN(v)) setv(v); else renderSettings(); };
+});
+
+/* Copia de seguridad */
+$("export").onclick = async () => {
+  S.lastBackup = Date.now(); save();
+  const json = JSON.stringify(S);
+  const name = "kit-emergencia-copia-" + todayISO() + ".json";
+  try {
+    const file = new File([json], name, { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "Copia kit de emergencia" });
+      toast("Copia lista"); render(); return;
+    }
+  } catch(err) { if (err && err.name === "AbortError") return; }
+  try {
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const a = document.createElement("a"); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast("Copia descargada"); render();
+  } catch(err) { showText("Copia de seguridad", json); }
+};
+let pending = null;
+$("import-file").onchange = e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (!data || !data.settings || !data.stock) throw 0;
+      pending = data;
+      const when = data.updatedAt ? new Date(data.updatedAt).toLocaleDateString("es-AR") : "fecha desconocida";
+      $("i-info").textContent = "Copia del " + when + ". Reemplaza todo lo que hay cargado ahora en este celular.";
+      $("m-import").classList.add("on");
+    } catch(err) { toast("Ese archivo no es una copia válida"); }
+    e.target.value = "";
+  };
+  r.readAsText(f);
+};
+$("i-no").onclick = () => { pending = null; $("m-import").classList.remove("on"); };
+$("i-yes").onclick = () => { S = Object.assign(fresh(), pending); pending = null; save(); render(); $("m-import").classList.remove("on"); toast("Copia restaurada"); };
+
+$("open-add").onclick = () => { $("m-add").classList.add("on"); $("a-name").focus(); };
+$("a-cancel").onclick = () => $("m-add").classList.remove("on");
+$("f-add").onsubmit = e => {
+  e.preventDefault();
+  const it = { id: "c" + Date.now().toString(36), custom: true, cat: "Agregados por vos",
+    name: $("a-name").value.trim(), unit: $("a-unit").value.trim(),
+    week: parseFloat($("a-week").value) || 0, kcal: parseFloat($("a-kcal").value) || 0,
+    step: parseFloat($("a-step").value) || 1, note: "" };
+  if (!it.name || !it.unit) return;
+  S.custom = (S.custom || []).concat([it]);
+  save(); render(); $("f-add").reset(); $("a-kcal").value = 0; $("a-step").value = 1;
+  $("m-add").classList.remove("on"); toast("Producto agregado");
+};
+$("reset").onclick = () => $("m-reset").classList.add("on");
+$("r-no").onclick = () => $("m-reset").classList.remove("on");
+$("r-yes").onclick = () => { S = fresh(); save(); render(); $("m-reset").classList.remove("on"); toast("Datos borrados"); };
+$("t-close").onclick = () => $("m-text").classList.remove("on");
+document.querySelectorAll(".modal").forEach(m => m.addEventListener("click", e => { if (e.target === m) m.classList.remove("on"); }));
+
+render();
+</script>
+</body>
+</html>
