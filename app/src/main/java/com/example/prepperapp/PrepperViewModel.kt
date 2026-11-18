@@ -33,8 +33,8 @@ internal class PrepperViewModel(application: Application) : AndroidViewModel(app
             repository.load()
         }
 
-    fun consume(productId: String, quantityMilli: Long) = run("Stock actualizado") {
-        repository.consume(productId, quantityMilli)
+    fun consumeLot(lotId: Long, quantityMilli: Long) = run("Stock actualizado") {
+        repository.consumeLot(lotId, quantityMilli)
         repository.load()
     }
 

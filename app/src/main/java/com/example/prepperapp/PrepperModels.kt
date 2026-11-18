@@ -27,9 +27,16 @@ internal data class Product(
     val custom: Boolean = false,
 )
 
+internal fun Product.defaultLotDate(today: LocalDate): LocalDate? =
+    if (id == "agua") today.plusMonths(3) else null
+
+internal fun Product.defaultDateKind(): DateKind =
+    if (id == "agua") DateKind.ROTATION else DateKind.EXPIRATION
+
 internal enum class DateKind(val label: String) {
     EXPIRATION("Vencimiento"),
     BEST_BEFORE("Consumo preferente"),
+    ROTATION("Rotación recomendada"),
 }
 
 internal data class StockLot(
@@ -40,7 +47,10 @@ internal data class StockLot(
     val dateKind: DateKind,
     val location: String,
     val usable: Boolean,
-)
+) {
+    fun isUsableOn(today: LocalDate): Boolean = usable &&
+        !(dateKind in setOf(DateKind.EXPIRATION, DateKind.ROTATION) && date?.isBefore(today) == true)
+}
 
 internal enum class TaskPeriod(val label: String) {
     WEEKLY("Semanal"),
@@ -89,10 +99,14 @@ internal data class PrepperState(
         .sortedWith(compareBy<StockLot> { it.date == null }.thenBy { it.date })
 
     fun quantityMilli(productId: String, usableOnly: Boolean = false): Long =
-        productLots(productId).filter { lot ->
-            !usableOnly || (lot.usable &&
-                !(lot.dateKind == DateKind.EXPIRATION && lot.date?.isBefore(today) == true))
-        }.sumOf { it.quantityMilli }
+        productLots(productId)
+            .filter { lot -> !usableOnly || lot.isUsableOn(today) }
+            .sumOf { it.quantityMilli }
+
+    fun suggestedLot(productId: String): StockLot? {
+        val lots = productLots(productId)
+        return lots.firstOrNull { it.isUsableOn(today) } ?: lots.firstOrNull()
+    }
 
     fun goalMilli(product: Product): Long {
         val raw = product.weeklyForFiveMilli.toDouble() * settings.people / 5.0 * settings.weeks

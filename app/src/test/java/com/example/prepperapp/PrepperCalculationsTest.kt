@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,6 +69,64 @@ class PrepperCalculationsTest {
         assertEquals(LocalDate.of(2026, 11, 25), state.taskDue(weekly))
         assertFalse(weekly.isPending(start, start))
         assertTrue(weekly.isPending(LocalDate.of(2026, 11, 25), start))
+    }
+
+    @Test
+    fun argentineDatesAreFormattedAndParsed() {
+        assertEquals("31/12/25", "311225".toArgentineDateInput())
+        assertEquals("31/12/2025", "31122025".toArgentineDateInput())
+        assertEquals(LocalDate.of(2025, 12, 31), "31/12/25".parseDateOrNull())
+        assertEquals(LocalDate.of(2025, 12, 31), "31/12/2025".parseDateOrNull())
+        assertNull("31/02/25".parseDateOrNull())
+    }
+
+    @Test
+    fun waterDefaultsToThreeMonthRotation() {
+        val today = LocalDate.of(2026, 11, 18)
+        val water = PrepperRepository.BASE_PRODUCTS.first { it.id == "agua" }
+        val rice = PrepperRepository.BASE_PRODUCTS.first { it.id == "arroz" }
+
+        assertEquals(LocalDate.of(2027, 2, 18), water.defaultLotDate(today))
+        assertEquals(DateKind.ROTATION, water.defaultDateKind())
+        assertNull(rice.defaultLotDate(today))
+        assertEquals(DateKind.EXPIRATION, rice.defaultDateKind())
+    }
+
+    @Test
+    fun expiredWaterRotationIsNotCountedAsUsable() {
+        val today = LocalDate.of(2026, 11, 18)
+        val water = PrepperRepository.BASE_PRODUCTS.first { it.id == "agua" }
+        val state = PrepperState(
+            settings = HouseholdSettings(people = 1, dailyWaterLitresMilli = 3_000),
+            products = listOf(water),
+            lots = listOf(
+                StockLot(1, water.id, 9_000, today.minusDays(1), DateKind.ROTATION, "", true),
+                StockLot(2, water.id, 6_000, today.plusDays(1), DateKind.ROTATION, "", true),
+            ),
+            today = today,
+            loading = false,
+        )
+
+        assertEquals(2.0, state.waterDays, 0.001)
+    }
+
+    @Test
+    fun consumptionSuggestsTheNearestUsableLot() {
+        val today = LocalDate.of(2026, 11, 18)
+        val rice = PrepperRepository.BASE_PRODUCTS.first { it.id == "arroz" }
+        val state = PrepperState(
+            products = listOf(rice),
+            lots = listOf(
+                StockLot(1, rice.id, 1_000, today.minusDays(1), DateKind.EXPIRATION, "", true),
+                StockLot(2, rice.id, 1_000, today.plusDays(5), DateKind.EXPIRATION, "", true),
+                StockLot(3, rice.id, 1_000, today.plusDays(2), DateKind.EXPIRATION, "", true),
+                StockLot(4, rice.id, 1_000, null, DateKind.EXPIRATION, "", true),
+            ),
+            today = today,
+            loading = false,
+        )
+
+        assertEquals(3L, state.suggestedLot(rice.id)?.id)
     }
 
     @Test

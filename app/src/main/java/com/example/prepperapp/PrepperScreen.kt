@@ -1,5 +1,6 @@
 package com.example.prepperapp
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
@@ -36,6 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -44,6 +47,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -64,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -76,7 +81,6 @@ import com.example.prepperapp.ui.theme.SignalAmber
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
 private enum class Section(val label: String, val icon: ImageVector) {
@@ -89,6 +93,14 @@ private enum class Section(val label: String, val icon: ImageVector) {
 private enum class PantryFilter(val label: String) {
     ALL("Todo"), SHOPPING("Para comprar"), EXPIRING("Vence pronto")
 }
+
+private enum class PantryAction {
+    LOTS,
+    ADD,
+    CONSUME,
+}
+
+private data class PantrySelection(val product: Product, val action: PantryAction)
 
 private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 private val Ok = FieldGreen
@@ -573,7 +585,7 @@ private fun PantryScreen(
     changeFilter: (PantryFilter) -> Unit,
     shareShoppingList: () -> Unit
 ) {
-    var selectedProduct by remember { mutableStateOf<Product?>(null) }
+    var selection by remember { mutableStateOf<PantrySelection?>(null) }
     var addingProduct by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PantryFilter.entries.forEach { item ->
@@ -602,7 +614,7 @@ private fun PantryScreen(
     shown.groupBy { it.category }.forEach { (category, products) ->
         SectionTitle(category)
         products.forEach { product ->
-            ProductCard(state, product, model, openLots = { selectedProduct = product })
+            ProductCard(state, product) { action -> selection = PantrySelection(product, action) }
         }
     }
     OutlinedButton(onClick = shareShoppingList, modifier = Modifier.fillMaxWidth()) {
@@ -612,15 +624,16 @@ private fun PantryScreen(
         Text("Agregar producto")
     }
 
-    selectedProduct?.let { product ->
+    selection?.let { selected ->
         ProductLotsDialog(
             state = state,
-            product = product,
-            onDismiss = { selectedProduct = null },
+            product = selected.product,
+            initialAction = selected.action,
+            onDismiss = { selection = null },
             addLot = model::addLot,
-            consume = model::consume,
+            consume = model::consumeLot,
             deleteLot = model::deleteLot,
-            deleteProduct = model::deleteCustomProduct
+            deleteProduct = model::deleteCustomProduct,
         )
     }
     if (addingProduct) {
@@ -632,10 +645,15 @@ private fun PantryScreen(
 }
 
 @Composable
-private fun ProductCard(state: PrepperState, product: Product, model: PrepperViewModel, openLots: () -> Unit) {
+private fun ProductCard(
+    state: PrepperState,
+    product: Product,
+    onAction: (PantryAction) -> Unit,
+) {
     val quantity = state.quantityMilli(product.id)
     val goal = state.goalMilli(product)
     val missing = state.missingMilli(product)
+    val lots = state.productLots(product.id)
     val color = when {
         missing == 0L -> Ok
         quantity > 0 -> Warn
@@ -644,49 +662,63 @@ private fun ProductCard(state: PrepperState, product: Product, model: PrepperVie
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(8.dp),
     ) {
-        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Box(Modifier.width(5.dp).height(48.dp).background(color, RoundedCornerShape(5.dp)))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(product.name, fontWeight = FontWeight.Bold)
-                    Text(buildString {
-                        append(product.unit)
-                        if (product.note.isNotBlank()) append(" · ${product.note}")
-                    }, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        buildString {
+                            append(product.unit)
+                            if (product.note.isNotBlank()) append(" · ${product.note}")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 StatusChip(if (missing == 0L) "Completo" else "Faltan ${missing.asQuantity()}", color)
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(
-                    onClick = { model.adjust(product, -product.stepMilli) },
-                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Restar ${product.name}" },
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                ) { Text("−", style = MaterialTheme.typography.headlineSmall) }
-                Text(quantity.asQuantity(), modifier = Modifier.width(70.dp),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                OutlinedButton(
-                    onClick = { model.adjust(product, product.stepMilli) },
-                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Sumar ${product.name}" },
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                ) { Text("+", style = MaterialTheme.typography.headlineSmall) }
-                Spacer(Modifier.width(8.dp))
-                Text("de ${goal.asQuantity()} ${product.unit}", modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            val nearest = state.productLots(product.id).firstOrNull { it.date != null }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (nearest != null) ExpiryChip(nearest, state.today)
-                else Text("Sin fechas cargadas", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = openLots) {
-                    Text("Lotes (${state.productLots(product.id).size})")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("En despensa", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        "${quantity.asQuantity()} ${product.unit}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
                 }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Objetivo", style = MaterialTheme.typography.labelMedium)
+                    Text("${goal.asQuantity()} ${product.unit}", fontWeight = FontWeight.Bold)
+                }
+            }
+            val nearest = lots.firstOrNull { it.date != null }
+            if (nearest != null) {
+                ExpiryChip(nearest, state.today)
+            } else {
+                Text(
+                    if (lots.isEmpty()) "Todavía no cargaste existencias" else "Existencias sin fecha cargada",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onAction(PantryAction.ADD) }, modifier = Modifier.weight(1f)) {
+                    Text("Agregar")
+                }
+                OutlinedButton(
+                    onClick = { onAction(PantryAction.CONSUME) },
+                    enabled = quantity > 0,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Consumir")
+                }
+            }
+            TextButton(onClick = { onAction(PantryAction.LOTS) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Ver existencias (${lots.size})")
             }
         }
     }
@@ -696,93 +728,259 @@ private fun ProductCard(state: PrepperState, product: Product, model: PrepperVie
 private fun ProductLotsDialog(
     state: PrepperState,
     product: Product,
+    initialAction: PantryAction,
     onDismiss: () -> Unit,
     addLot: (String, Long, LocalDate?, DateKind, String) -> Unit,
-    consume: (String, Long) -> Unit,
+    consume: (Long, Long) -> Unit,
     deleteLot: (Long) -> Unit,
-    deleteProduct: (String) -> Unit
+    deleteProduct: (String) -> Unit,
 ) {
-    var mode by remember { mutableStateOf("list") }
-    var amount by remember { mutableStateOf(product.stepMilli.asQuantity()) }
-    var date by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf(DateKind.EXPIRATION) }
-    var deleteId by remember { mutableStateOf<Long?>(null) }
-    var confirmProductDelete by remember { mutableStateOf(false) }
+    when (initialAction) {
+        PantryAction.ADD -> AddStockDialog(product, onDismiss, addLot)
+        PantryAction.CONSUME -> ConsumeStockDialog(state, product, onDismiss, consume)
+        PantryAction.LOTS -> LotsDialog(state, product, onDismiss, deleteLot, deleteProduct)
+    }
+}
+
+@Composable
+private fun AddStockDialog(
+    product: Product,
+    onDismiss: () -> Unit,
+    addLot: (String, Long, LocalDate?, DateKind, String) -> Unit,
+) {
+    val isWater = product.id == "agua"
+    val defaultDate = remember(product.id) {
+        product.defaultLotDate(LocalDate.now())?.format(dateFormat).orEmpty()
+    }
+    var amount by remember(product.id) { mutableStateOf(product.stepMilli.asQuantity()) }
+    var date by remember(product.id) { mutableStateOf(defaultDate) }
+    var location by remember(product.id) { mutableStateOf("") }
+    var kind by remember(product.id) { mutableStateOf(product.defaultDateKind()) }
+    val amountMilli = amount.toMilli()
+    val parsedDate = date.parseDateOrNull()
+    val validDate = (date.isBlank() || parsedDate != null)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Agregar ${product.name}") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    if (isWater) {
+                        "Cargá los litros almacenados. La fecha de rotación se propone a 3 meses."
+                    } else {
+                        "Cada carga queda separada para poder consumir primero lo que vence antes."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                NumberField("Cantidad (${product.unit})", amount) { amount = it }
+                ExpirationDateField(
+                    value = date,
+                    label = if (isWater) "Próxima rotación" else "Fecha del envase (opcional)",
+                    guidance = if (isWater) {
+                        "El material indica rotar o volver a tratar el agua entre 3 y 6 meses."
+                    } else {
+                        "Escribí DD/MM/AA o elegí una fecha."
+                    },
+                    onValueChange = { date = it },
+                )
+                if (!isWater && date.isNotBlank()) {
+                    Text("La etiqueta dice", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(DateKind.EXPIRATION, DateKind.BEST_BEFORE).forEach { dateKind ->
+                            FilterChip(
+                                selected = kind == dateKind,
+                                onClick = { kind = dateKind },
+                                label = { Text(dateKind.label) },
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = location,
+                    onValueChange = { location = it },
+                    label = { Text("Ubicación (opcional)") },
+                    placeholder = { Text(if (isWater) "Ej.: lavadero" else "Ej.: alacena") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    addLot(product.id, amountMilli, parsedDate, kind, location)
+                    onDismiss()
+                },
+                enabled = amountMilli > 0 && validDate,
+            ) {
+                Text("Agregar")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+@Composable
+private fun ConsumeStockDialog(
+    state: PrepperState,
+    product: Product,
+    onDismiss: () -> Unit,
+    consume: (Long, Long) -> Unit,
+) {
+    val lots = state.productLots(product.id)
+    val suggested = state.suggestedLot(product.id)
+    var selectedId by remember(product.id, suggested?.id) { mutableStateOf(suggested?.id) }
+    var amount by remember(product.id, suggested?.id) {
+        mutableStateOf(minOf(product.stepMilli, suggested?.quantityMilli ?: 0).asQuantity())
+    }
+    val selectedLot = lots.firstOrNull { it.id == selectedId }
     val amountMilli = amount.toMilli()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(product.name) },
+        title = { Text("Consumir ${product.name}") },
         text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Stock total: ${state.quantityMilli(product.id).asQuantity()} ${product.unit}",
-                    fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(mode == "list", { mode = "list" }, { Text("Lotes") })
-                    FilterChip(mode == "add", { mode = "add" }, { Text("Reponer") })
-                    FilterChip(mode == "consume", { mode = "consume" }, { Text("Consumir") })
-                }
-                when (mode) {
-                    "add" -> {
-                        NumberField("Cantidad (${product.unit})", amount) { amount = it }
-                        OutlinedTextField(date, { date = it }, label = { Text("Fecha (AAAA-MM-DD), opcional") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            DateKind.entries.forEach {
-                                FilterChip(kind == it, { kind = it }, { Text(it.label) })
-                            }
-                        }
-                        OutlinedTextField(location, { location = it }, label = { Text("Ubicación, opcional") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true)
-                        Button(
-                            onClick = {
-                                addLot(product.id, amountMilli, date.parseDateOrNull(), kind, location)
-                                onDismiss()
-                            },
-                            enabled = amountMilli > 0 && (date.isBlank() || date.parseDateOrNull() != null),
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Guardar lote") }
-                    }
-                    "consume" -> {
-                        Text("Se descontará primero el lote utilizable con la fecha más próxima.")
-                        NumberField("Cantidad a consumir", amount) { amount = it }
-                        Button(
-                            onClick = { consume(product.id, amountMilli); onDismiss() },
-                            enabled = amountMilli > 0 && state.quantityMilli(product.id) > 0,
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Descontar stock") }
-                    }
-                    else -> {
-                        val lots = state.productLots(product.id)
-                        if (lots.isEmpty()) Text("Todavía no hay lotes cargados.")
-                        lots.forEach { lot ->
-                            OutlinedCard(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(10.dp)) {
-                                    Text("${lot.quantityMilli.asQuantity()} ${product.unit}", fontWeight = FontWeight.Bold)
-                                    Text(lot.date?.let { "${lot.dateKind.label}: ${it.format(dateFormat)}" } ?: "Sin fecha")
-                                    if (lot.location.isNotBlank()) Text("Ubicación: ${lot.location}")
-                                    TextButton(onClick = { deleteId = lot.id }) { Text("Eliminar lote") }
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "Elegí de cuál existencia descontar. Sugerimos la que vence o se rota antes.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                lots.forEach { lot ->
+                    val isSuggested = lot.id == suggested?.id
+                    OutlinedCard(
+                        onClick = {
+                            selectedId = lot.id
+                            amount = minOf(product.stepMilli, lot.quantityMilli).asQuantity()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = selectedId == lot.id,
+                                onClick = null,
+                            )
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "${lot.quantityMilli.asQuantity()} ${product.unit}",
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    if (isSuggested) StatusChip("Sugerida", Ok)
+                                }
+                                Text(
+                                    lot.date?.let { "${lot.dateKind.label}: ${it.format(dateFormat)}" }
+                                        ?: "Sin fecha informada",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                if (lot.location.isNotBlank()) {
+                                    Text(
+                                        "Ubicación: ${lot.location}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
                                 }
                             }
                         }
-                        if (product.custom) {
-                            TextButton(onClick = { confirmProductDelete = true }) {
-                                Text("Quitar producto personalizado", color = Bad)
-                            }
-                        }
+                    }
+                }
+                NumberField("Cantidad a consumir (${product.unit})", amount) { amount = it }
+                selectedLot?.let { lot ->
+                    if (amountMilli > lot.quantityMilli) {
+                        Text("La cantidad supera la existencia elegida.", color = Bad)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    selectedLot?.let { consume(it.id, amountMilli) }
+                    onDismiss()
+                },
+                enabled = selectedLot != null && amountMilli in 1..selectedLot.quantityMilli,
+            ) {
+                Text("Confirmar")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+@Composable
+private fun LotsDialog(
+    state: PrepperState,
+    product: Product,
+    onDismiss: () -> Unit,
+    deleteLot: (Long) -> Unit,
+    deleteProduct: (String) -> Unit,
+) {
+    var deleteId by remember { mutableStateOf<Long?>(null) }
+    var confirmProductDelete by remember { mutableStateOf(false) }
+    val lots = state.productLots(product.id)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Existencias de ${product.name}") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "Total: ${state.quantityMilli(product.id).asQuantity()} ${product.unit}",
+                    fontWeight = FontWeight.Bold,
+                )
+                if (lots.isEmpty()) {
+                    Text("Todavía no hay existencias cargadas.")
+                }
+                lots.forEachIndexed { index, lot ->
+                    OutlinedCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                "Existencia ${index + 1}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                "${lot.quantityMilli.asQuantity()} ${product.unit}",
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                lot.date?.let { "${lot.dateKind.label}: ${it.format(dateFormat)}" }
+                                    ?: "Fecha no informada",
+                            )
+                            if (lot.location.isNotBlank()) Text("Ubicación: ${lot.location}")
+                            TextButton(onClick = { deleteId = lot.id }) { Text("Eliminar") }
+                        }
+                    }
+                }
+                if (product.custom) {
+                    TextButton(onClick = { confirmProductDelete = true }) {
+                        Text("Quitar producto personalizado", color = Bad)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } },
     )
     if (confirmProductDelete) {
         AlertDialog(
             onDismissRequest = { confirmProductDelete = false },
             title = { Text("¿Quitar este producto?") },
-            text = { Text("También se eliminarán todos sus lotes. Esta acción no se puede deshacer.") },
+            text = { Text("También se eliminarán todas sus existencias. Esta acción no se puede deshacer.") },
             confirmButton = {
                 TextButton(onClick = {
                     deleteProduct(product.id)
@@ -792,19 +990,67 @@ private fun ProductLotsDialog(
             },
             dismissButton = {
                 TextButton(onClick = { confirmProductDelete = false }) { Text("Cancelar") }
-            }
+            },
         )
     }
     deleteId?.let { id ->
         AlertDialog(
             onDismissRequest = { deleteId = null },
-            title = { Text("¿Eliminar este lote?") },
-            text = { Text("La cantidad registrada en este lote se quitará del inventario.") },
+            title = { Text("¿Eliminar esta existencia?") },
+            text = { Text("La cantidad registrada se quitará de la despensa.") },
             confirmButton = {
                 TextButton(onClick = { deleteLot(id); deleteId = null }) { Text("Eliminar", color = Bad) }
             },
-            dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Cancelar") } },
         )
+    }
+}
+
+@Composable
+private fun ExpirationDateField(
+    value: String,
+    label: String,
+    guidance: String,
+    onValueChange: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val parsed = value.parseDateOrNull()
+    val digits = value.filter(Char::isDigit)
+    val complete = digits.length == 6 || digits.length == 8
+    val invalid = complete && parsed == null
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onValueChange(it.toArgentineDateInput()) },
+        label = { Text(label) },
+        placeholder = { Text("DD/MM/AAAA") },
+        supportingText = {
+            Text(if (invalid) "Revisá el día y el mes." else guidance)
+        },
+        isError = invalid,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        trailingIcon = {
+            IconButton(
+                onClick = {
+                    val initial = parsed ?: LocalDate.now()
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day ->
+                            onValueChange(LocalDate.of(year, month + 1, day).format(dateFormat))
+                        },
+                        initial.year,
+                        initial.monthValue - 1,
+                        initial.dayOfMonth,
+                    ).show()
+                },
+            ) {
+                Icon(Icons.Filled.DateRange, contentDescription = "Elegir fecha en el calendario")
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+    )
+    if (value.isNotBlank()) {
+        TextButton(onClick = { onValueChange("") }) { Text("Quitar fecha") }
     }
 }
 
@@ -1080,14 +1326,23 @@ private fun NumberField(label:String,value:String,onValue:(String)->Unit){
 @Composable
 private fun ExpiryChip(lot: StockLot, today: LocalDate) {
     val date = lot.date ?: return
-    val days = ChronoUnit.DAYS.between(today,date)
-    val text = when {
-        days < 0 -> "Vencido"
-        days == 0L -> "Vence hoy"
-        days <= 60 -> "Vence en $days d"
-        else -> date.format(dateFormat)
+    val days = ChronoUnit.DAYS.between(today, date)
+    val text = if (lot.dateKind == DateKind.ROTATION) {
+        when {
+            days < 0 -> "Rotación vencida"
+            days == 0L -> "Rotar hoy"
+            days <= 60 -> "Rotar en $days d"
+            else -> "Rotar ${date.format(dateFormat)}"
+        }
+    } else {
+        when {
+            days < 0 -> "Vencido"
+            days == 0L -> "Vence hoy"
+            days <= 60 -> "Vence en $days d"
+            else -> date.format(dateFormat)
+        }
     }
-    StatusChip(text,when{days<0->Bad;days<=60->Warn;else->Ok})
+    StatusChip(text, when { days < 0 -> Bad; days <= 60 -> Warn; else -> Ok })
 }
 
 @Composable
@@ -1130,8 +1385,25 @@ private fun KitCard(content:@Composable ColumnScope.()->Unit){
 private fun String.toMilli():Long =
     (replace(',','.').toDoubleOrNull()?.times(1000)?.toLong() ?: 0L).coerceAtLeast(0)
 
-private fun String.parseDateOrNull():LocalDate? =
-    if(isBlank()) null else try{LocalDate.parse(this)}catch(_:DateTimeParseException){null}
+internal fun String.toArgentineDateInput(): String {
+    val digits = filter(Char::isDigit).take(8)
+    return buildString {
+        append(digits.take(2))
+        if (digits.length > 2) append('/').append(digits.substring(2, minOf(4, digits.length)))
+        if (digits.length > 4) append('/').append(digits.substring(4))
+    }
+}
+
+internal fun String.parseDateOrNull(): LocalDate? {
+    if (isBlank()) return null
+    val digits = filter(Char::isDigit)
+    if (digits.length != 6 && digits.length != 8) return null
+    val day = digits.substring(0, 2).toInt()
+    val month = digits.substring(2, 4).toInt()
+    val rawYear = digits.substring(4).toInt()
+    val year = if (digits.length == 6) 2000 + rawYear else rawYear
+    return runCatching { LocalDate.of(year, month, day) }.getOrNull()
+}
 
 @androidx.compose.ui.tooling.preview.Preview(
     name = "Inicio · teléfono",

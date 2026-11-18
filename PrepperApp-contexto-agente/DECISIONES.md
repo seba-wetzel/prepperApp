@@ -14,9 +14,13 @@ La demo HTML es referencia, no implementación. La app usa Jetpack Compose y com
 
 La implementación actual usa `SQLiteOpenHelper` para minimizar dependencias. Una migración a Room solo se justifica si mejora pruebas, migraciones o mantenimiento sin poner en riesgo los datos.
 
-### Inventario por lotes
+### Inventario por existencias separadas
 
-Un producto puede tener varios vencimientos y ubicaciones. El consumo aplica una estrategia FEFO aproximada: primero lotes utilizables con fecha más cercana.
+Un producto puede tener varias cantidades con vencimientos y ubicaciones diferentes. La UI evita el término técnico “lote” en las acciones principales: Agregar, Consumir y Ver existencias abren diálogos separados, cada uno con una sola finalidad. Al consumir se muestran todas las existencias, se preselecciona y marca como sugerida la utilizable con vencimiento o rotación más próxima, pero el usuario puede elegir otra y el descuento se aplica únicamente a la seleccionada.
+
+### Fechas argentinas y rotación del agua
+
+La entrada de fecha usa `DD/MM/AA` o `DD/MM/AAAA`, teclado numérico autoformateado y calendario en español argentino. Para Agua se usa `ROTATION` y se propone tres meses desde la carga, tomando el extremo conservador del intervalo de 3–6 meses indicado por la clase. Una rotación vencida no cuenta como agua utilizable hasta que se actualice la existencia.
 
 ### Onboarding antes de avisos
 

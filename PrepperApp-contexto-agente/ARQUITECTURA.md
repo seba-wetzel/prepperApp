@@ -56,10 +56,13 @@ Las claves foráneas están habilitadas. Al eliminar un producto o tarea, sus re
 - Las cantidades se guardan como `Long` en milésimas para evitar errores de coma flotante.
 - No se permiten lotes negativos.
 - Un lote sin fecha es válido.
+- Las fechas de entrada se presentan y aceptan en formato argentino; internamente continúan guardándose como `LocalDate` ISO.
 - `DateKind.EXPIRATION` vencido no cuenta para autonomía utilizable.
 - `DateKind.BEST_BEFORE` no se excluye automáticamente.
+- `DateKind.ROTATION` representa la revisión/rotación del agua y, una vez vencida, deja de contar para la autonomía utilizable.
+- Agua propone por defecto `fecha actual + 3 meses`, usando el límite conservador del intervalo de 3–6 meses del material validado.
 - El stock total es la suma de lotes.
-- El consumo recorre lotes disponibles ordenados por usabilidad, fecha conocida más próxima e ID.
+- Al consumir, la UI sugiere la existencia utilizable con fecha conocida más próxima, pero el usuario elige el lote exacto y el repositorio descuenta únicamente de ese ID.
 - Los productos base no se eliminan; solo los personalizados.
 - Ajustes válidos: 1–30 personas, 1–52 semanas, 1000–5000 kcal y 0,5–20 litros diarios por persona.
 

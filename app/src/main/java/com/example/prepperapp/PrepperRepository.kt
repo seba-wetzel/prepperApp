@@ -157,16 +157,20 @@ internal class PrepperRepository private constructor(context: Context) :
     }
 
     @Synchronized
-    fun consume(productId: String, quantityMilli: Long) {
+    fun consumeLot(lotId: Long, quantityMilli: Long) {
         require(quantityMilli > 0)
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            consume(db, productId, quantityMilli)
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
+        val available = readableDatabase.rawQuery(
+            "SELECT quantity_milli FROM lot WHERE id=?",
+            arrayOf(lotId.toString()),
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "La existencia ya no está disponible" }
+            cursor.getLong(0)
         }
+        require(quantityMilli <= available) { "La cantidad supera la existencia elegida" }
+        writableDatabase.execSQL(
+            "UPDATE lot SET quantity_milli=quantity_milli-? WHERE id=?",
+            arrayOf(quantityMilli, lotId),
+        )
     }
 
     private fun consume(db: SQLiteDatabase, productId: String, requested: Long) {

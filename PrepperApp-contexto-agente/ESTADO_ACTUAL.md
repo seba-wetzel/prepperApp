@@ -31,11 +31,13 @@ Fecha de corte: 18 de noviembre de 2026. Baseline: commit `780ed8e`.
 - Catálogo inicial de 25 productos.
 - Filtros Todo, Para comprar y Vence pronto.
 - Objetivos calculados según hogar y semanas.
-- Ajuste rápido de cantidades.
+- Acciones explícitas por producto: Agregar, Consumir y Ver existencias; ya no se crea stock sin contexto mediante botones `+ / −`.
 - Alta de productos personalizados.
-- Stock por lotes con cantidad, fecha opcional, tipo de fecha y ubicación.
-- Consumo priorizado por lotes utilizables y fecha más próxima.
-- Eliminación de lotes y de productos personalizados.
+- Cada carga crea una existencia separada con cantidad, fecha opcional, tipo de fecha y ubicación.
+- La fecha acepta `DD/MM/AA` o `DD/MM/AAAA`, se autoformatea con teclado numérico y también ofrece calendario localizado en español argentino.
+- Para Agua se propone una rotación a tres meses, el extremo conservador del intervalo de 3–6 meses indicado por el material del curso.
+- Al consumir se muestran todas las existencias, se sugiere la utilizable con vencimiento o rotación más próxima y el usuario puede elegir exactamente de cuál descontar.
+- Eliminación de existencias y de productos personalizados.
 - Lista de compras compartible mediante el selector nativo de Android.
 
 ### Tareas
