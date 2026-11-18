@@ -22,8 +22,19 @@ import java.util.concurrent.TimeUnit
 
 class ReviewWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result = try {
-        ReviewStore.get(applicationContext).check { review ->
-            ReviewReminders.send(applicationContext, "Próxima revisión: ${review.due.displayDate()}")
+        val state = PrepperRepository.get(applicationContext).load()
+        if (!state.settings.configured) {
+            ReviewReminders.clearReview(applicationContext)
+        } else {
+            val parts = buildList {
+                if (state.pendingTasks.isNotEmpty()) add("${state.pendingTasks.size} tareas pendientes")
+                if (state.expiringLots.isNotEmpty()) add("${state.expiringLots.size} lotes vencidos o próximos a vencer")
+            }
+            if (parts.isNotEmpty()) {
+                ReviewReminders.send(applicationContext, parts.joinToString(" · "))
+            } else {
+                ReviewReminders.clearReview(applicationContext)
+            }
         }
         Result.success()
     } catch (_: SQLiteException) {
@@ -36,10 +47,12 @@ internal object ReviewReminders {
     const val CHANNEL = "reserve_reviews"
     private const val REVIEW_NOTIFICATION = 1
     private const val TEST_NOTIFICATION = 2
+    private const val PERIODIC_WORK = "daily-reserve-review"
+    private const val IMMEDIATE_WORK = "check-reserve-review"
 
     fun schedule(context: Context) {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "daily-reserve-review",
+            PERIODIC_WORK,
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<ReviewWorker>(1, TimeUnit.DAYS)
                 .setInitialDelay(1, TimeUnit.DAYS)
@@ -49,15 +62,21 @@ internal object ReviewReminders {
 
     fun checkNow(context: Context) {
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "check-reserve-review",
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            IMMEDIATE_WORK,
+            ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<ReviewWorker>().build()
         )
     }
 
+    fun stop(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK)
+        WorkManager.getInstance(context).cancelUniqueWork(IMMEDIATE_WORK)
+        clearReview(context)
+    }
+
     fun registerChannel(context: Context) {
         manager(context).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Revisiones de reservas", NotificationManager.IMPORTANCE_DEFAULT)
+            NotificationChannel(CHANNEL, "Revisiones y vencimientos", NotificationManager.IMPORTANCE_DEFAULT)
         )
     }
 
@@ -76,21 +95,18 @@ internal object ReviewReminders {
 
     fun send(context: Context, message: String, test: Boolean = false): Boolean {
         registerChannel(context)
-        if (!appEnabled(context) || !channelEnabled(context)) return false
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-        ) return false
+        if (!hasPermission(context) || !appEnabled(context) || !channelEnabled(context)) return false
         val openTasks = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java)
                 .setAction(OPEN_TASKS)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(if (test) "Aviso de prueba" else REVIEW_TITLE)
+            .setContentTitle(if (test) "Aviso de prueba" else "Mi kit de emergencia")
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setContentIntent(openTasks)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
