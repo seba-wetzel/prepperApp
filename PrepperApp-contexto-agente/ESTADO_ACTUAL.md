@@ -30,7 +30,7 @@ Fecha de corte: 18 de noviembre de 2026. Baseline: commit `780ed8e`.
 
 - Catálogo inicial de 25 productos, configurable desde Ajustes mediante casillas individuales.
 - Los productos ocultos conservan sus existencias, pero no aparecen en Despensa, Para comprar, autonomía, próximos vencimientos ni avisos.
-- Alta de productos personalizados desde la misma sección de Ajustes.
+- Alta de productos personalizados desde la misma sección de Ajustes, con selector de unidades predefinidas para evitar nombres inconsistentes.
 - Filtros Todo, Para comprar y Vence pronto.
 - Objetivos calculados según hogar y semanas.
 - Acciones explícitas por producto: Agregar, Consumir y Ver existencias; ya no se crea stock sin contexto mediante botones `+ / −`.

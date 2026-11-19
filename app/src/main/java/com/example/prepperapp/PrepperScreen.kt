@@ -34,7 +34,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -103,6 +107,17 @@ private enum class PantryAction {
 private data class PantrySelection(val product: Product, val action: PantryAction)
 
 private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+private val productUnits = listOf(
+    "unidades",
+    "kg",
+    "litros",
+    "latas",
+    "paquetes",
+    "frascos",
+    "cajas",
+    "botellas",
+    "bidones",
+)
 private val Ok = FieldGreen
 private val Warn = SignalAmber
 private val Bad = EmergencyRedDark
@@ -1061,13 +1076,15 @@ private fun ExpirationDateField(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddProductDialog(
     onDismiss: () -> Unit,
     save: (String, String, String, Long, Int, Long) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf(productUnits.first()) }
+    var unitExpanded by remember { mutableStateOf(false) }
     var category by remember { mutableStateOf("Agregados por vos") }
     var weekly by remember { mutableStateOf("1") }
     var kcal by remember { mutableStateOf("0") }
@@ -1078,7 +1095,34 @@ private fun AddProductDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name,{name=it},label={Text("Nombre")},modifier=Modifier.fillMaxWidth())
-                OutlinedTextField(unit,{unit=it},label={Text("Unidad")},modifier=Modifier.fillMaxWidth())
+                ExposedDropdownMenuBox(
+                    expanded = unitExpanded,
+                    onExpandedChange = { unitExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = unit,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Unidad") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(unitExpanded) },
+                        modifier = Modifier.fillMaxWidth()
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = unitExpanded,
+                        onDismissRequest = { unitExpanded = false },
+                    ) {
+                        productUnits.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    unit = option
+                                    unitExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(category,{category=it},label={Text("Categoría")},modifier=Modifier.fillMaxWidth())
                 NumberField("Por semana para 5 personas",weekly){weekly=it}
                 NumberField("Kcal por unidad",kcal){kcal=it}
