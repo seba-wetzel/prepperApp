@@ -48,6 +48,10 @@ Cuando haya conflicto, inspeccionar el código y consultar al usuario solo si la
 - Iconos Material reconocibles; no usar caracteres Unicode como iconos.
 - Las texturas, recortes y tratamiento gráfico de las diapositivas deben reservarse para hero images o recursos, sin reducir legibilidad ni rendimiento.
 
+### Ícono de la aplicación
+
+El ícono vigente usa una mochila de emergencia negra con símbolos de agua y alimento, sobre un círculo rojo y fondo papel. La versión adaptativa separa foreground y background para respetar las máscaras del launcher y usa la paleta exacta de la app. El PNG de 512 × 512 para Play Store se conserva en `play-store-assets/icon-512.png`.
+
 La tipografía del curso se aproxima con familias del sistema: Sans Serif pesada y Monospace. No se empaquetaron IBM Plex Mono ni Helvetica.
 
 ## Estructura de navegación
