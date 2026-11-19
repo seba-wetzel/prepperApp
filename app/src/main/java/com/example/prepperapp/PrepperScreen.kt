@@ -586,7 +586,6 @@ private fun PantryScreen(
     shareShoppingList: () -> Unit
 ) {
     var selection by remember { mutableStateOf<PantrySelection?>(null) }
-    var addingProduct by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PantryFilter.entries.forEach { item ->
             FilterChip(
@@ -598,7 +597,7 @@ private fun PantryScreen(
         }
     }
 
-    val shown = state.products.filter { product ->
+    val shown = state.visibleProducts.filter { product ->
         when (filter) {
             PantryFilter.ALL -> true
             PantryFilter.SHOPPING -> state.missingMilli(product) > 0
@@ -608,8 +607,12 @@ private fun PantryScreen(
         }
     }
     if (shown.isEmpty()) {
-        KitCard { Text(if (filter == PantryFilter.SHOPPING) "No falta nada: el stock cubre la meta."
-            else "Nada vence en los próximos 60 días.") }
+        val message = when (filter) {
+            PantryFilter.ALL -> "No hay productos visibles. Podés elegirlos desde Ajustes."
+            PantryFilter.SHOPPING -> "No falta nada: el stock cubre la meta."
+            PantryFilter.EXPIRING -> "Nada vence en los próximos 60 días."
+        }
+        KitCard { Text(message) }
     }
     shown.groupBy { it.category }.forEach { (category, products) ->
         SectionTitle(category)
@@ -620,10 +623,6 @@ private fun PantryScreen(
     OutlinedButton(onClick = shareShoppingList, modifier = Modifier.fillMaxWidth()) {
         Text("Compartir lista de compras")
     }
-    OutlinedButton(onClick = { addingProduct = true }, modifier = Modifier.fillMaxWidth()) {
-        Text("Agregar producto")
-    }
-
     selection?.let { selected ->
         ProductLotsDialog(
             state = state,
@@ -635,12 +634,6 @@ private fun PantryScreen(
             deleteLot = model::deleteLot,
             deleteProduct = model::deleteCustomProduct,
         )
-    }
-    if (addingProduct) {
-        AddProductDialog(onDismiss = { addingProduct = false }) { name, unit, category, weekly, kcal, step ->
-            model.addProduct(name, unit, category, weekly, kcal, step)
-            addingProduct = false
-        }
     }
 }
 
@@ -776,6 +769,11 @@ private fun AddStockDialog(
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Text(
+                    "Al guardar te daremos un código corto para marcar e identificar este envase.",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                )
                 NumberField("Cantidad (${product.unit})", amount) { amount = it }
                 ExpirationDateField(
                     value = date,
@@ -875,10 +873,18 @@ private fun ConsumeStockDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        "${lot.quantityMilli.asQuantity()} ${product.unit}",
-                                        fontWeight = FontWeight.Bold,
-                                    )
+                                    Column {
+                                        Text(
+                                            lot.code,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = EmergencyRedDark,
+                                        )
+                                        Text(
+                                            "${lot.quantityMilli.asQuantity()} ${product.unit}",
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
                                     if (isSuggested) StatusChip("Sugerida", Ok)
                                 }
                                 Text(
@@ -950,9 +956,10 @@ private fun LotsDialog(
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
-                                "Existencia ${index + 1}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lot.code.ifBlank { "Existencia ${index + 1}" },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = EmergencyRedDark,
                             )
                             Text(
                                 "${lot.quantityMilli.asQuantity()} ${product.unit}",
@@ -1226,6 +1233,7 @@ private fun SettingsScreen(
 ) {
     val settings = state.settings
     var confirmReset by remember { mutableStateOf(false) }
+    var addingProduct by remember { mutableStateOf(false) }
     KitCard {
         SettingsStepper("Personas","Integrantes del hogar",settings.people,1,30) {
             model.updateSettings(settings.copy(people=it))
@@ -1246,6 +1254,39 @@ private fun SettingsScreen(
     }
     Text("Las metas de producto se ajustan según las personas y semanas. La autonomía es una estimación.",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+    SectionTitle("Alimentos de la despensa")
+    Text(
+        "Marcá los productos que consume tu hogar. Los desmarcados conservan sus existencias, pero no aparecen en la despensa, las compras, la autonomía ni los avisos.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    KitCard {
+        OutlinedButton(onClick = { addingProduct = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Agregar producto nuevo")
+        }
+        HorizontalDivider()
+        state.products.forEachIndexed { index, product ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = product.visible,
+                    onCheckedChange = { model.setProductVisible(product.id, it) },
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(product.name, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (product.custom) "Producto agregado por vos" else product.category,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (index < state.products.lastIndex) HorizontalDivider()
+        }
+    }
 
     SectionTitle("Avisos")
     KitCard {
@@ -1272,6 +1313,12 @@ private fun SettingsScreen(
     }
     OutlinedButton(onClick={confirmReset=true},modifier=Modifier.fillMaxWidth()){
         Text("Borrar todos los datos", color=Bad)
+    }
+    if (addingProduct) {
+        AddProductDialog(onDismiss = { addingProduct = false }) { name, unit, category, weekly, kcal, step ->
+            model.addProduct(name, unit, category, weekly, kcal, step)
+            addingProduct = false
+        }
     }
     if(confirmReset){
         AlertDialog(

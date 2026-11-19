@@ -41,11 +41,11 @@ Las operaciones del ViewModel se ejecutan en `Dispatchers.IO`. Después de cada 
 
 ## Esquema SQLite
 
-Base: `prepper_app.db`, versión 2.
+Base: `prepper_app.db`, versión 3.
 
 - `settings`: una fila con personas, semanas, kcal, agua diaria, último backup, onboarding y fecha inicial del cronograma.
-- `product`: catálogo base y productos personalizados.
-- `lot`: existencias por producto; cantidad en milésimas, fecha opcional, tipo, ubicación y disponibilidad.
+- `product`: catálogo base y productos personalizados; incluye visibilidad elegida por el hogar.
+- `lot`: existencias por producto; cantidad en milésimas, fecha opcional, tipo, ubicación, disponibilidad y código físico estable.
 - `task`: definición, período y estado activo.
 - `task_completion`: historial con fecha local e instante.
 
@@ -62,8 +62,10 @@ Las claves foráneas están habilitadas. Al eliminar un producto o tarea, sus re
 - `DateKind.ROTATION` representa la revisión/rotación del agua y, una vez vencida, deja de contar para la autonomía utilizable.
 - Agua propone por defecto `fecha actual + 3 meses`, usando el límite conservador del intervalo de 3–6 meses del material validado.
 - El stock total es la suma de lotes.
+- Cada lote tiene un código estable: prefijo de dos letras relacionado con el producto y secuencia numérica mínima de dos dígitos. La migración v3 asigna códigos a lotes anteriores sin recrearlos.
 - Al consumir, la UI sugiere la existencia utilizable con fecha conocida más próxima, pero el usuario elige el lote exacto y el repositorio descuenta únicamente de ese ID.
 - Los productos base no se eliminan; solo los personalizados.
+- Un producto oculto conserva sus lotes, pero queda excluido de la UI principal, lista de compras, autonomía y próximos vencimientos.
 - Ajustes válidos: 1–30 personas, 1–52 semanas, 1000–5000 kcal y 0,5–20 litros diarios por persona.
 
 ## Cálculos
@@ -94,8 +96,8 @@ Incluye:
 
 - versión y fecha de exportación;
 - ajustes;
-- productos;
-- lotes;
+- productos, incluida su visibilidad;
+- lotes, incluido su código físico;
 - tareas e historial.
 
 La importación exige versión 2, aplica límites de cantidad de elementos y reemplaza los datos en una transacción. No hay compatibilidad implementada con el JSON v1 de la demo HTML.

@@ -27,11 +27,20 @@ internal class PrepperViewModel(application: Application) : AndroidViewModel(app
         repository.load()
     }
 
-    fun addLot(productId: String, quantityMilli: Long, date: LocalDate?, kind: DateKind, location: String) =
-        run("Lote guardado") {
-            repository.addLot(productId, quantityMilli, date, kind, location)
-            repository.load()
+    fun addLot(productId: String, quantityMilli: Long, date: LocalDate?, kind: DateKind, location: String) {
+        viewModelScope.launch {
+            try {
+                val (newState, code) = withContext(Dispatchers.IO) {
+                    val code = repository.addLot(productId, quantityMilli, date, kind, location)
+                    repository.load() to code
+                }
+                mutableState.value = newState
+                mutableMessage.value = "Existencia $code guardada. Usá ese código para identificar el envase."
+            } catch (error: Exception) {
+                mutableMessage.value = error.message ?: "No se pudo guardar el cambio"
+            }
         }
+    }
 
     fun consumeLot(lotId: Long, quantityMilli: Long) = run("Stock actualizado") {
         repository.consumeLot(lotId, quantityMilli)
@@ -51,6 +60,11 @@ internal class PrepperViewModel(application: Application) : AndroidViewModel(app
 
     fun deleteCustomProduct(id: String) = run("Producto eliminado") {
         repository.deleteCustomProduct(id)
+        repository.load()
+    }
+
+    fun setProductVisible(id: String, visible: Boolean) = run {
+        repository.setProductVisible(id, visible)
         repository.load()
     }
 

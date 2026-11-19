@@ -18,6 +18,14 @@ La implementación actual usa `SQLiteOpenHelper` para minimizar dependencias. Un
 
 Un producto puede tener varias cantidades con vencimientos y ubicaciones diferentes. La UI evita el término técnico “lote” en las acciones principales: Agregar, Consumir y Ver existencias abren diálogos separados, cada uno con una sola finalidad. Al consumir se muestran todas las existencias, se preselecciona y marca como sugerida la utilizable con vencimiento o rotación más próxima, pero el usuario puede elegir otra y el descuento se aplica únicamente a la seleccionada.
 
+### Catálogo elegido por el hogar
+
+Ajustes muestra el catálogo completo con casillas. Ocultar un producto es reversible y no elimina sus existencias, pero lo excluye de Despensa, compras, autonomía y avisos para no recomendar alimentos que el hogar no consume. Los productos personalizados se crean desde esta misma sección.
+
+### Código físico por existencia
+
+Cada existencia recibe al guardarse un código estable formado por dos letras relacionadas con el producto y una secuencia mínima de dos dígitos. Se usan prefijos explícitos para los casos acordados (`LP` para leche en polvo, `LA` para lata de atún y `AR` para arvejas) y una abreviatura derivada del nombre para los demás. El código no cambia al ordenar por fecha y se conserva en el backup.
+
 ### Fechas argentinas y rotación del agua
 
 La entrada de fecha usa `DD/MM/AA` o `DD/MM/AAAA`, teclado numérico autoformateado y calendario en español argentino. Para Agua se usa `ROTATION` y se propone tres meses desde la carga, tomando el extremo conservador del intervalo de 3–6 meses indicado por la clase. Una rotación vencida no cuenta como agua utilizable hasta que se actualice la existencia.

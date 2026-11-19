@@ -10,7 +10,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 internal class PrepperRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context, "prepper_app.db", null, 2) {
+    SQLiteOpenHelper(context, "prepper_app.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE settings (
@@ -20,11 +20,13 @@ internal class PrepperRepository private constructor(context: Context) :
         db.execSQL("""CREATE TABLE product (
             id TEXT PRIMARY KEY, name TEXT NOT NULL, unit TEXT NOT NULL, category TEXT NOT NULL,
             weekly_milli INTEGER NOT NULL, kcal INTEGER NOT NULL, step_milli INTEGER NOT NULL,
-            note TEXT NOT NULL, custom INTEGER NOT NULL DEFAULT 0)""")
+            note TEXT NOT NULL, custom INTEGER NOT NULL DEFAULT 0,
+            visible INTEGER NOT NULL DEFAULT 1)""")
         db.execSQL("""CREATE TABLE lot (
             id INTEGER PRIMARY KEY AUTOINCREMENT, product_id TEXT NOT NULL REFERENCES product(id) ON DELETE CASCADE,
             quantity_milli INTEGER NOT NULL CHECK(quantity_milli >= 0), local_date TEXT,
-            date_kind TEXT NOT NULL, location TEXT NOT NULL, usable INTEGER NOT NULL DEFAULT 1)""")
+            date_kind TEXT NOT NULL, location TEXT NOT NULL, usable INTEGER NOT NULL DEFAULT 1,
+            code TEXT NOT NULL)""")
         db.execSQL("""CREATE TABLE task (
             id TEXT PRIMARY KEY, title TEXT NOT NULL, period TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1,
             custom INTEGER NOT NULL DEFAULT 0)""")
@@ -49,6 +51,11 @@ internal class PrepperRepository private constructor(context: Context) :
             db.execSQL("ALTER TABLE settings ADD COLUMN task_start TEXT NOT NULL DEFAULT '1970-01-01'")
             db.execSQL("UPDATE settings SET task_start=?", arrayOf(LocalDate.now().toString()))
         }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE product ADD COLUMN visible INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE lot ADD COLUMN code TEXT NOT NULL DEFAULT ''")
+            assignMissingLotCodes(db)
+        }
     }
 
     @Synchronized
@@ -69,24 +76,24 @@ internal class PrepperRepository private constructor(context: Context) :
             )
         }
         val products = db.rawQuery(
-            "SELECT id,name,unit,category,weekly_milli,kcal,step_milli,note,custom FROM product ORDER BY rowid", null
+            "SELECT id,name,unit,category,weekly_milli,kcal,step_milli,note,custom,visible FROM product ORDER BY rowid", null
         ).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) add(Product(
                     cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3),
                     cursor.getLong(4), cursor.getInt(5), cursor.getLong(6), cursor.getString(7),
-                    cursor.getInt(8) == 1
+                    cursor.getInt(8) == 1, cursor.getInt(9) == 1
                 ))
             }
         }
         val lots = db.rawQuery(
-            "SELECT id,product_id,quantity_milli,local_date,date_kind,location,usable FROM lot WHERE quantity_milli>0", null
+            "SELECT id,product_id,quantity_milli,local_date,date_kind,location,usable,code FROM lot WHERE quantity_milli>0", null
         ).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) add(StockLot(
                     cursor.getLong(0), cursor.getString(1), cursor.getLong(2),
                     cursor.getString(3)?.let(LocalDate::parse), DateKind.valueOf(cursor.getString(4)),
-                    cursor.getString(5), cursor.getInt(6) == 1
+                    cursor.getString(5), cursor.getInt(6) == 1, cursor.getString(7)
                 ))
             }
         }
@@ -151,9 +158,9 @@ internal class PrepperRepository private constructor(context: Context) :
     }
 
     @Synchronized
-    fun addLot(productId: String, quantityMilli: Long, date: LocalDate?, kind: DateKind, location: String) {
+    fun addLot(productId: String, quantityMilli: Long, date: LocalDate?, kind: DateKind, location: String): String {
         require(quantityMilli > 0)
-        insertLot(writableDatabase, productId, quantityMilli, date, kind, location.trim(), true)
+        return insertLot(writableDatabase, productId, quantityMilli, date, kind, location.trim(), true)
     }
 
     @Synchronized
@@ -209,6 +216,13 @@ internal class PrepperRepository private constructor(context: Context) :
     @Synchronized
     fun deleteCustomProduct(id: String) {
         writableDatabase.delete("product", "id=? AND custom=1", arrayOf(id))
+    }
+
+    @Synchronized
+    fun setProductVisible(id: String, visible: Boolean) {
+        writableDatabase.update("product", ContentValues().apply {
+            put("visible", if (visible) 1 else 0)
+        }, "id=?", arrayOf(id))
     }
 
     @Synchronized
@@ -303,13 +317,14 @@ internal class PrepperRepository private constructor(context: Context) :
                     put("id",p.id); put("name",p.name); put("unit",p.unit); put("category",p.category)
                     put("weeklyMilli",p.weeklyForFiveMilli); put("kcal",p.kcalPerUnit)
                     put("stepMilli",p.stepMilli); put("note",p.note); put("custom",p.custom)
+                    put("visible",p.visible)
                 })
             } })
             put("lots", JSONArray().apply { state.lots.forEach { lot ->
                 put(JSONObject().apply {
                     put("productId",lot.productId); put("quantityMilli",lot.quantityMilli)
                     put("date",lot.date?.toString() ?: JSONObject.NULL); put("dateKind",lot.dateKind.name)
-                    put("location",lot.location); put("usable",lot.usable)
+                    put("location",lot.location); put("usable",lot.usable); put("code",lot.code)
                 })
             } })
             put("tasks", JSONArray().apply { state.tasks.forEach { task ->
@@ -355,13 +370,15 @@ internal class PrepperRepository private constructor(context: Context) :
                     put("category",p.getString("category")); put("weekly_milli",p.getLong("weeklyMilli"))
                     put("kcal",p.getInt("kcal")); put("step_milli",p.getLong("stepMilli"))
                     put("note",p.optString("note")); put("custom",if(p.optBoolean("custom")) 1 else 0)
+                    put("visible",if(p.optBoolean("visible",true)) 1 else 0)
                 })
             }
             for (i in 0 until lotsJson.length()) {
                 val lot = lotsJson.getJSONObject(i)
                 val date = if (lot.isNull("date")) null else LocalDate.parse(lot.getString("date"))
                 insertLot(db,lot.getString("productId"),lot.getLong("quantityMilli"),date,
-                    DateKind.valueOf(lot.getString("dateKind")),lot.optString("location"),lot.optBoolean("usable",true))
+                    DateKind.valueOf(lot.getString("dateKind")),lot.optString("location"),
+                    lot.optBoolean("usable",true),lot.optString("code").takeIf { it.isNotBlank() })
             }
             for (i in 0 until tasksJson.length()) {
                 val task = tasksJson.getJSONObject(i)
@@ -385,15 +402,38 @@ internal class PrepperRepository private constructor(context: Context) :
         }
     }
 
+    private fun nextLotCodeFor(db: SQLiteDatabase, productId: String): String {
+        val productName = db.rawQuery("SELECT name FROM product WHERE id=?", arrayOf(productId)).use {
+            require(it.moveToFirst()) { "El producto ya no está disponible" }
+            it.getString(0)
+        }
+        val prefix = lotCodePrefix(productId, productName)
+        val existing = db.rawQuery("SELECT code FROM lot WHERE code LIKE ?", arrayOf("$prefix%"))
+            .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
+        return nextLotCode(prefix, existing)
+    }
+
+    private fun assignMissingLotCodes(db: SQLiteDatabase) {
+        val ids = db.rawQuery("SELECT id,product_id FROM lot WHERE code='' ORDER BY id", null).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getLong(0) to cursor.getString(1)) }
+        }
+        ids.forEach { (id, productId) ->
+            db.execSQL("UPDATE lot SET code=? WHERE id=?", arrayOf<Any>(nextLotCodeFor(db, productId), id))
+        }
+    }
+
     private fun insertLot(
         db: SQLiteDatabase, productId: String, quantity: Long, date: LocalDate?,
-        kind: DateKind, location: String, usable: Boolean
-    ) {
+        kind: DateKind, location: String, usable: Boolean, preferredCode: String? = null,
+    ): String {
+        val code = preferredCode ?: nextLotCodeFor(db, productId)
         db.insertOrThrow("lot", null, ContentValues().apply {
             put("product_id", productId); put("quantity_milli", quantity)
             if (date == null) putNull("local_date") else put("local_date", date.toString())
             put("date_kind", kind.name); put("location", location); put("usable", if (usable) 1 else 0)
+            put("code", code)
         })
+        return code
     }
 
     private fun seedProducts(db: SQLiteDatabase) {
@@ -401,7 +441,7 @@ internal class PrepperRepository private constructor(context: Context) :
             db.insertOrThrow("product", null, ContentValues().apply {
                 put("id",p.id); put("name",p.name); put("unit",p.unit); put("category",p.category)
                 put("weekly_milli",p.weeklyForFiveMilli); put("kcal",p.kcalPerUnit)
-                put("step_milli",p.stepMilli); put("note",p.note); put("custom",0)
+                put("step_milli",p.stepMilli); put("note",p.note); put("custom",0); put("visible",1)
             })
         }
     }

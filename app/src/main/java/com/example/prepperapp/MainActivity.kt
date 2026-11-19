@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
 
     private fun shareShoppingList() {
         val state = model.state.value
-        val lines = state.products.mapNotNull { product ->
+        val lines = state.visibleProducts.mapNotNull { product ->
             val missing = state.missingMilli(product)
             if (missing > 0) "• ${product.name}: ${missing.asQuantity()} ${product.unit}" else null
         }

@@ -130,6 +130,34 @@ class PrepperCalculationsTest {
     }
 
     @Test
+    fun lotCodesUseProductRelatedPrefixesAndIncrement() {
+        assertEquals("LP", lotCodePrefix("leche", "Leche en polvo"))
+        assertEquals("LA", lotCodePrefix("atun", "Atún o caballa en lata"))
+        assertEquals("AR", lotCodePrefix("choclo", "Choclo o arvejas en lata"))
+        assertEquals("GC", lotCodePrefix("custom", "Garbanzos cocidos"))
+        assertEquals("LP03", nextLotCode("LP", listOf("LP01", "LP02", "AR01")))
+    }
+
+    @Test
+    fun hiddenProductsDoNotAffectShoppingAutonomyOrExpiry() {
+        val today = LocalDate.of(2026, 11, 18)
+        val rice = PrepperRepository.BASE_PRODUCTS.first { it.id == "arroz" }.copy(visible = false)
+        val state = PrepperState(
+            settings = HouseholdSettings(people = 1, weeks = 2, dailyKcal = 1800),
+            products = listOf(rice),
+            lots = listOf(
+                StockLot(1, rice.id, 2_000, today.plusDays(10), DateKind.EXPIRATION, "", true, "AR01"),
+            ),
+            today = today,
+            loading = false,
+        )
+
+        assertEquals(0, state.shoppingCount)
+        assertEquals(0.0, state.foodDays, 0.001)
+        assertTrue(state.expiringLots.isEmpty())
+    }
+
+    @Test
     fun monthlyTasksUseCalendarPeriods() {
         val completion = TaskCompletion(1, "m", LocalDate.of(2027, 1, 31), Instant.EPOCH)
         val task = MaintenanceTask("m", "Mensual", TaskPeriod.MONTHLY, true, listOf(completion))

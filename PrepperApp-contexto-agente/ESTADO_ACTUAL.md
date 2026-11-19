@@ -28,12 +28,14 @@ Fecha de corte: 18 de noviembre de 2026. Baseline: commit `780ed8e`.
 
 ### Despensa
 
-- Catálogo inicial de 25 productos.
+- Catálogo inicial de 25 productos, configurable desde Ajustes mediante casillas individuales.
+- Los productos ocultos conservan sus existencias, pero no aparecen en Despensa, Para comprar, autonomía, próximos vencimientos ni avisos.
+- Alta de productos personalizados desde la misma sección de Ajustes.
 - Filtros Todo, Para comprar y Vence pronto.
 - Objetivos calculados según hogar y semanas.
 - Acciones explícitas por producto: Agregar, Consumir y Ver existencias; ya no se crea stock sin contexto mediante botones `+ / −`.
-- Alta de productos personalizados.
-- Cada carga crea una existencia separada con cantidad, fecha opcional, tipo de fecha y ubicación.
+- Cada carga crea una existencia separada con cantidad, fecha opcional, tipo de fecha, ubicación y código estable de dos letras más secuencia (`LP01`, `LA01`, etc.).
+- El código se informa al guardar y se muestra al consultar o consumir para poder marcar físicamente cada envase.
 - La fecha acepta `DD/MM/AA` o `DD/MM/AAAA`, se autoformatea con teclado numérico y también ofrece calendario localizado en español argentino.
 - Para Agua se propone una rotación a tres meses, el extremo conservador del intervalo de 3–6 meses indicado por el material del curso.
 - Al consumir se muestran todas las existencias, se sugiere la utilizable con vencimiento o rotación más próxima y el usuario puede elegir exactamente de cuál descontar.

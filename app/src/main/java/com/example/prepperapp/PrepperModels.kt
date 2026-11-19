@@ -25,6 +25,7 @@ internal data class Product(
     val stepMilli: Long,
     val note: String,
     val custom: Boolean = false,
+    val visible: Boolean = true,
 )
 
 internal fun Product.defaultLotDate(today: LocalDate): LocalDate? =
@@ -32,6 +33,37 @@ internal fun Product.defaultLotDate(today: LocalDate): LocalDate? =
 
 internal fun Product.defaultDateKind(): DateKind =
     if (id == "agua") DateKind.ROTATION else DateKind.EXPIRATION
+
+internal fun lotCodePrefix(productId: String, productName: String): String {
+    val preferred = mapOf(
+        "leche" to "LP",
+        "atun" to "LA",
+        "choclo" to "AR",
+    )[productId]
+    preferred?.let { return it }
+
+    val ignored = setOf("DE", "DEL", "EN", "LA", "EL", "LOS", "LAS", "O", "Y", "CON")
+    val words = java.text.Normalizer.normalize(productName.uppercase(), java.text.Normalizer.Form.NFD)
+        .replace("\\p{M}+".toRegex(), "")
+        .split("[^A-Z0-9]+".toRegex())
+        .filter { it.isNotBlank() && (it !in ignored) }
+    val letters = when {
+        words.size >= 2 -> "${words[0].first()}${words[1].first()}"
+        words.isNotEmpty() -> words.first().filter(Char::isLetterOrDigit).take(2)
+        else -> "PR"
+    }
+    return letters.padEnd(2, 'X').take(2)
+}
+
+internal fun nextLotCode(prefix: String, existingCodes: Iterable<String>): String {
+    val next = existingCodes.asSequence()
+        .filter { it.startsWith(prefix) }
+        .mapNotNull { it.removePrefix(prefix).toIntOrNull() }
+        .maxOrNull()
+        ?.plus(1)
+        ?: 1
+    return prefix + next.toString().padStart(2, '0')
+}
 
 internal enum class DateKind(val label: String) {
     EXPIRATION("Vencimiento"),
@@ -47,6 +79,7 @@ internal data class StockLot(
     val dateKind: DateKind,
     val location: String,
     val usable: Boolean,
+    val code: String = "",
 ) {
     fun isUsableOn(today: LocalDate): Boolean = usable &&
         !(dateKind in setOf(DateKind.EXPIRATION, DateKind.ROTATION) && date?.isBefore(today) == true)
@@ -94,6 +127,7 @@ internal data class PrepperState(
     val loading: Boolean = true,
 ) {
     val targetDays: Int get() = settings.weeks * 7
+    val visibleProducts: List<Product> get() = products.filter { it.visible }
 
     fun productLots(productId: String) = lots.filter { it.productId == productId }
         .sortedWith(compareBy<StockLot> { it.date == null }.thenBy { it.date })
@@ -117,7 +151,7 @@ internal data class PrepperState(
 
     fun missingMilli(product: Product): Long = (goalMilli(product) - quantityMilli(product.id)).coerceAtLeast(0)
 
-    val shoppingCount: Int get() = products.count { missingMilli(it) > 0 }
+    val shoppingCount: Int get() = visibleProducts.count { missingMilli(it) > 0 }
 
     val pendingTasks: List<MaintenanceTask> get() =
         if (!settings.configured) emptyList()
@@ -130,21 +164,23 @@ internal data class PrepperState(
         task.daysUntil(today, settings.taskScheduleStart)
 
     val foodDays: Double get() {
-        val kcal = products.filter { it.id != "agua" }.sumOf { product ->
+        val kcal = visibleProducts.filter { it.id != "agua" }.sumOf { product ->
             quantityMilli(product.id, usableOnly = true).toDouble() / 1000 * product.kcalPerUnit
         }
         return kcal / (settings.people * settings.dailyKcal).coerceAtLeast(1)
     }
 
     val waterDays: Double get() {
-        val water = quantityMilli("agua", usableOnly = true).toDouble()
+        val water = if (visibleProducts.any { it.id == "agua" }) {
+            quantityMilli("agua", usableOnly = true).toDouble()
+        } else 0.0
         val daily = settings.people * settings.dailyWaterLitresMilli
         return if (daily <= 0) 0.0 else water / daily
     }
 
     val expiringLots: List<Pair<Product, StockLot>> get() = lots.asSequence()
         .filter { it.quantityMilli > 0 && it.date != null && ChronoUnit.DAYS.between(today, it.date) <= 60 }
-        .mapNotNull { lot -> products.firstOrNull { it.id == lot.productId }?.let { it to lot } }
+        .mapNotNull { lot -> visibleProducts.firstOrNull { it.id == lot.productId }?.let { it to lot } }
         .sortedBy { it.second.date }
         .take(6)
         .toList()
