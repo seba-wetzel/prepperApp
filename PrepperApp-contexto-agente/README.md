@@ -26,7 +26,7 @@ Los PDF y ODP fueron aportados por el usuario como material de referencia y pued
 
 - Proyecto: `/home/seba/AndroidStudioProjects/PrepperApp`
 - Rama: `main`
-- Paquete: `com.example.prepperapp`
+- Paquete: `ar.nuestramerica.prepper`
 - Hito implementado y publicado: `780ed8e feat: complete prepper experience and visual identity`
 - La aplicación es Android nativa con Kotlin y Jetpack Compose.
 - Funciona sin cuenta, backend ni conexión para sus funciones centrales.

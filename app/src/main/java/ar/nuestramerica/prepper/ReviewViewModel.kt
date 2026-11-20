@@ -1,4 +1,4 @@
-package com.example.prepperapp
+package ar.nuestramerica.prepper
 
 import android.app.Application
 import android.database.sqlite.SQLiteException

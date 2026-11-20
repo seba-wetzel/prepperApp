@@ -1,4 +1,4 @@
-package com.example.prepperapp
+package ar.nuestramerica.prepper
 
 import android.Manifest
 import android.content.ActivityNotFoundException
@@ -21,7 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
-import com.example.prepperapp.ui.theme.PrepperAppTheme
+import ar.nuestramerica.prepper.ui.theme.PrepperAppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter

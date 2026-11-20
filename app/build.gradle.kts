@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.prepperapp"
+    namespace = "ar.nuestramerica.prepper"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.prepperapp"
+        applicationId = "ar.nuestramerica.prepper"
         minSdk = 31
         targetSdk = 37
         versionCode = 1

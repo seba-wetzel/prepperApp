@@ -1,4 +1,4 @@
-package com.example.prepperapp
+package ar.nuestramerica.prepper
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -61,7 +61,7 @@ internal fun PrepperState.reviewAlerts(): List<ReviewAlert> {
 }
 
 internal object ReviewReminders {
-    const val OPEN_TASKS = "com.example.prepperapp.OPEN_TASKS"
+    const val OPEN_TASKS = "ar.nuestramerica.prepper.OPEN_TASKS"
     const val CHANNEL = "reserve_reviews"
     private const val REVIEW_NOTIFICATION = 1
     private const val TEST_NOTIFICATION = 2

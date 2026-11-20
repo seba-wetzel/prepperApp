@@ -1,4 +1,4 @@
-package com.example.prepperapp
+package ar.nuestramerica.prepper
 
 import java.time.Instant
 import java.time.LocalDate

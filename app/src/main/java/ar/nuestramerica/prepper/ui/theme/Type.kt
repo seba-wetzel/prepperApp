@@ -1,4 +1,4 @@
-package com.example.prepperapp.ui.theme
+package ar.nuestramerica.prepper.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

@@ -1,4 +1,4 @@
-package com.example.prepperapp
+package ar.nuestramerica.prepper
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
@@ -77,11 +77,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import com.example.prepperapp.ui.theme.EmergencyRedDark
-import com.example.prepperapp.ui.theme.FieldGreen
-import com.example.prepperapp.ui.theme.Ink
-import com.example.prepperapp.ui.theme.Paper
-import com.example.prepperapp.ui.theme.SignalAmber
+import ar.nuestramerica.prepper.ui.theme.EmergencyRedDark
+import ar.nuestramerica.prepper.ui.theme.FieldGreen
+import ar.nuestramerica.prepper.ui.theme.Ink
+import ar.nuestramerica.prepper.ui.theme.Paper
+import ar.nuestramerica.prepper.ui.theme.SignalAmber
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -1543,7 +1543,7 @@ internal fun String.parseDateOrNull(): LocalDate? {
 )
 @Composable
 private fun HomePreview() {
-    com.example.prepperapp.ui.theme.PrepperAppTheme(darkTheme = false) {
+    ar.nuestramerica.prepper.ui.theme.PrepperAppTheme(darkTheme = false) {
         val products = PrepperRepository.BASE_PRODUCTS
         val state = PrepperState(
             products = products,
