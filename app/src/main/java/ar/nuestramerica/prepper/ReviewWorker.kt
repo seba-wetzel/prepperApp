@@ -35,6 +35,8 @@ internal data class ReviewAlert(
     val lot: StockLot? = null, val product: Product? = null, val task: MaintenanceTask? = null,
 )
 
+internal fun StockLot.reviewKey() = "lot/$id/$productId/$code"
+
 internal fun PrepperState.reviewAlerts(): List<ReviewAlert> {
     if (!settings.configured) return emptyList()
     val format = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
@@ -48,7 +50,7 @@ internal fun PrepperState.reviewAlerts(): List<ReviewAlert> {
                 date == today.plusDays(1) -> "Vence mañana"
                 else -> "Vence el"
             }
-            add(ReviewAlert("lot/${lot.id}/${product.id}/${lot.code}", "${product.name} · ${lot.code}",
+            add(ReviewAlert(lot.reviewKey(), "${product.name} · ${lot.code}",
                 "$label ${date.format(format)} · ${lot.quantityMilli.asQuantity()} ${product.unit}",
                 date, lot = lot, product = product))
         }

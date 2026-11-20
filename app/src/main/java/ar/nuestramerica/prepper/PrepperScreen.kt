@@ -60,6 +60,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -288,6 +290,7 @@ internal fun PrepperApp(
                                 section = Section.PANTRY
                             },
                             goTasks = { section = Section.TASKS },
+                            openLot = { selectReview(it.reviewKey()) },
                             dialEmergency = dialEmergency,
                         )
                         Section.PANTRY -> PantryScreen(
@@ -432,6 +435,7 @@ private fun HomeScreen(
     state: PrepperState,
     goShopping: () -> Unit,
     goTasks: () -> Unit,
+    openLot: (StockLot) -> Unit,
     dialEmergency: (String) -> Unit,
 ) {
     var emergencyVisible by rememberSaveable { mutableStateOf(false) }
@@ -462,14 +466,17 @@ private fun HomeScreen(
         } else {
             state.expiringLots.take(6).forEachIndexed { index, (product, lot) ->
                 if (index > 0) HorizontalDivider()
-                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                Row(Modifier.fillMaxWidth()
+                    .clickable(onClickLabel = "Abrir lote", role = androidx.compose.ui.semantics.Role.Button) { openLot(lot) }
+                    .heightIn(min = 48.dp).padding(vertical = 5.dp),
                     horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(product.name, fontWeight = FontWeight.SemiBold)
-                        Text("${lot.quantityMilli.asQuantity()} ${product.unit}",
+                        Text(listOf(lot.code, "${lot.quantityMilli.asQuantity()} ${product.unit}").filter { it.isNotBlank() }.joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall)
                     }
                     ExpiryChip(lot, state.today)
+                    Text("›", Modifier.padding(start = 6.dp).semantics { contentDescription = "" })
                 }
             }
         }
@@ -1593,7 +1600,7 @@ private fun HomePreview() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            HomeScreen(state, {}, {}, {})
+            HomeScreen(state, {}, {}, {}, {})
         }
     }
 }
