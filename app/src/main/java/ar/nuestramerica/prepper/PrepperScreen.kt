@@ -725,7 +725,17 @@ private fun ProductCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                StatusChip(if (missing == 0L) "Completo" else "Faltan ${missing.asQuantity()}", color)
+                val scheme = MaterialTheme.colorScheme
+                val chipColors = when {
+                    missing == 0L -> scheme.secondaryContainer to scheme.onSecondaryContainer
+                    quantity > 0 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+                    else -> scheme.primaryContainer to scheme.onPrimaryContainer
+                }
+                StatusChip(
+                    if (missing == 0L) "Completo" else "Faltan ${missing.asQuantity()}",
+                    color = chipColors.second,
+                    background = chipColors.first,
+                )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
@@ -1476,11 +1486,11 @@ private fun ExpiryChip(lot: StockLot, today: LocalDate) {
 }
 
 @Composable
-private fun StatusChip(text:String,color:Color){
+private fun StatusChip(text: String, color: Color, background: Color = color.copy(alpha = .12f)) {
     Text(
         text.uppercase(),
         modifier = Modifier
-            .background(color.copy(alpha = .12f), RoundedCornerShape(2.dp))
+            .background(background, RoundedCornerShape(2.dp))
             .border(1.dp, color.copy(alpha = .55f), RoundedCornerShape(2.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
         color = color,
