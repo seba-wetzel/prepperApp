@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.prepperapp.ui.theme.PrepperAppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,7 +32,7 @@ import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     private val model: PrepperViewModel by viewModels()
-    private var openTasksSignal by mutableStateOf(0)
+    private var reviewKey by mutableStateOf<String?>(null)
     private var rationaleVisible by mutableStateOf(false)
     private var restoreText by mutableStateOf<String?>(null)
     private var backupText: String? = null
@@ -76,10 +77,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null && intent.action == ReviewReminders.OPEN_TASKS) openTasksSignal++
+        reviewKey = if (savedInstanceState != null) savedInstanceState.getString("reviewKey") else target(intent)
         lifecycleScope.launch {
             model.state
-                .map { !it.loading && it.settings.configured }
+                .filter { !it.loading }
+                .map { it.settings.configured }
                 .distinctUntilChanged()
                 .collect { configured ->
                     if (configured) {
@@ -95,7 +97,8 @@ class MainActivity : ComponentActivity() {
             PrepperAppTheme {
                 PrepperApp(
                     model = model,
-                    openTasksSignal = openTasksSignal,
+                    reviewKey = reviewKey,
+                    selectReview = { reviewKey = it },
                     notificationsAllowed = ReviewReminders.hasPermission(this),
                     notificationsEnabled = ReviewReminders.appEnabled(this) && ReviewReminders.channelEnabled(this),
                     requestNotifications = ::requestNotifications,
@@ -150,7 +153,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ReviewReminders.OPEN_TASKS) openTasksSignal++
+        reviewKey = target(intent)
+    }
+
+    private fun target(intent: Intent): String? =
+        if (intent.action == ReviewReminders.OPEN_TASKS) intent.data?.lastPathSegment ?: ReviewReminders.SUMMARY else null
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("reviewKey", reviewKey)
     }
 
     private fun requestNotifications() {

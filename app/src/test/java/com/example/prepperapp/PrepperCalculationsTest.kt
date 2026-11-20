@@ -158,6 +158,26 @@ class PrepperCalculationsTest {
     }
 
     @Test
+    fun reviewTargetsIdentifyEachLotAndEachTaskOccurrence() {
+        val today = LocalDate.of(2026, 11, 20)
+        val product = PrepperRepository.BASE_PRODUCTS.first { it.id == "atun" }
+        val task = MaintenanceTask("kit", "Revisar botiquín", TaskPeriod.WEEKLY, true, emptyList())
+        val lots = (1L..7L).map { id ->
+            StockLot(id, product.id, 2000, today.plusDays(id), DateKind.EXPIRATION, "", true, "LA0$id")
+        }
+        val state = PrepperState(HouseholdSettings(configured = true, taskScheduleStart = today.minusWeeks(1)),
+            listOf(product), lots, listOf(task), today)
+        val alerts = state.reviewAlerts()
+        assertEquals(8, alerts.distinctBy { it.key }.size)
+        assertEquals(task.title, alerts.first().title)
+        assertTrue(alerts.last().title.contains("LA07"))
+        assertTrue(alerts.last().detail.contains("27/11/2026"))
+        val completed = task.copy(completions = listOf(TaskCompletion(1, task.id, today, Instant.EPOCH)))
+        val nextWeek = state.copy(lots = lots.dropLast(1), tasks = listOf(completed), today = today.plusWeeks(1))
+        assertTrue(nextWeek.reviewAlerts().none { it.key in setOf(alerts.first().key, alerts.last().key) })
+    }
+
+    @Test
     fun monthlyTasksUseCalendarPeriods() {
         val completion = TaskCompletion(1, "m", LocalDate.of(2027, 1, 31), Instant.EPOCH)
         val task = MaintenanceTask("m", "Mensual", TaskPeriod.MONTHLY, true, listOf(completion))

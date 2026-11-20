@@ -23,23 +23,41 @@ import java.util.concurrent.TimeUnit
 class ReviewWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result = try {
         val state = PrepperRepository.get(applicationContext).load()
-        if (!state.settings.configured) {
-            ReviewReminders.clearReview(applicationContext)
-        } else {
-            val parts = buildList {
-                if (state.pendingTasks.isNotEmpty()) add("${state.pendingTasks.size} tareas pendientes")
-                if (state.expiringLots.isNotEmpty()) add("${state.expiringLots.size} lotes vencidos o próximos a vencer")
-            }
-            if (parts.isNotEmpty()) {
-                ReviewReminders.send(applicationContext, parts.joinToString(" · "))
-            } else {
-                ReviewReminders.clearReview(applicationContext)
-            }
-        }
+        ReviewReminders.publish(applicationContext, state.reviewAlerts())
         Result.success()
     } catch (_: SQLiteException) {
         Result.retry()
     }
+}
+
+internal data class ReviewAlert(
+    val key: String, val title: String, val detail: String, val date: java.time.LocalDate,
+    val lot: StockLot? = null, val product: Product? = null, val task: MaintenanceTask? = null,
+)
+
+internal fun PrepperState.reviewAlerts(): List<ReviewAlert> {
+    if (!settings.configured) return emptyList()
+    val format = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    return buildList {
+        for ((product, lot) in expiringLots) {
+            val date = requireNotNull(lot.date)
+            val label = when {
+                lot.dateKind != DateKind.EXPIRATION -> lot.dateKind.label
+                date < today -> "Venció el"
+                date == today -> "Vence hoy"
+                date == today.plusDays(1) -> "Vence mañana"
+                else -> "Vence el"
+            }
+            add(ReviewAlert("lot/${lot.id}/${product.id}/${lot.code}", "${product.name} · ${lot.code}",
+                "$label ${date.format(format)} · ${lot.quantityMilli.asQuantity()} ${product.unit}",
+                date, lot = lot, product = product))
+        }
+        for (task in pendingTasks) {
+            val due = taskDue(task)
+            add(ReviewAlert("task/${task.id}/$due", task.title,
+                "Pendiente desde el ${due.format(format)}", due, task = task))
+        }
+    }.sortedBy { it.date }
 }
 
 internal object ReviewReminders {
@@ -91,7 +109,39 @@ internal object ReviewReminders {
             it != NotificationManager.IMPORTANCE_NONE
         } ?: false
 
-    fun clearReview(context: Context) = manager(context).cancel(REVIEW_NOTIFICATION)
+    const val SUMMARY = "summary"
+    private const val GROUP = "reserve_alerts"
+
+    fun clearReview(context: Context) = publish(context, emptyList())
+
+    fun publish(context: Context, alerts: List<ReviewAlert>) {
+        val manager = manager(context)
+        registerChannel(context)
+        val keys = alerts.mapTo(mutableSetOf()) { it.key }
+        for (old in manager.activeNotifications) {
+            if (old.id == REVIEW_NOTIFICATION && old.tag !in keys && !(old.tag == SUMMARY && alerts.size > 1)) {
+                manager.cancel(old.tag, old.id)
+            }
+        }
+        if (alerts.isEmpty() || !hasPermission(context) || !appEnabled(context) || !channelEnabled(context)) return
+        fun post(key: String, title: String, detail: String, summary: Boolean = false) {
+            val intent = Intent(context, MainActivity::class.java).setAction(OPEN_TASKS)
+                .setData(android.net.Uri.Builder().scheme("prepper").authority("review").appendPath(key).build())
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val builder = NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title).setContentText(detail)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+                .setOnlyAlertOnce(true).setAutoCancel(true)
+                .setContentIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE))
+            if (alerts.size > 1) builder.setGroup(GROUP).setGroupSummary(summary)
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+            manager.notify(key, REVIEW_NOTIFICATION, builder.build())
+        }
+        alerts.forEach { post(it.key, it.title, it.detail) }
+        if (alerts.size > 1) post(SUMMARY, "${alerts.size} avisos de revisión",
+            alerts.take(3).joinToString(" · ") { it.title }, true)
+    }
 
     fun send(context: Context, message: String, test: Boolean = false): Boolean {
         registerChannel(context)

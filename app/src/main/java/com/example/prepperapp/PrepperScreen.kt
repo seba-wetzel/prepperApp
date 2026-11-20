@@ -126,7 +126,8 @@ private val Bad = EmergencyRedDark
 @Composable
 internal fun PrepperApp(
     model: PrepperViewModel,
-    openTasksSignal: Int,
+    reviewKey: String?,
+    selectReview: (String?) -> Unit,
     notificationsAllowed: Boolean,
     notificationsEnabled: Boolean,
     requestNotifications: () -> Unit,
@@ -143,8 +144,45 @@ internal fun PrepperApp(
     var pantryFilter by rememberSaveable { mutableStateOf(PantryFilter.ALL) }
     val snackbar = remember { SnackbarHostState() }
 
-    LaunchedEffect(openTasksSignal) {
-        if (openTasksSignal > 0) section = Section.TASKS
+    if (reviewKey != null && !state.loading && state.settings.configured) {
+        val alerts = remember(state) { state.reviewAlerts() }
+        val alert = alerts.firstOrNull { it.key == reviewKey }
+        val dismiss = { selectReview(null) }
+        if (alert?.lot != null && alert.product != null) {
+            androidx.compose.runtime.key(reviewKey) {
+                ConsumeStockDialog(state, alert.product, dismiss, model::consumeLot, alert.lot.id)
+            }
+        } else {
+            AlertDialog(
+                onDismissRequest = dismiss,
+                title = { Text(alert?.title ?: if (reviewKey == ReviewReminders.SUMMARY) "Avisos pendientes" else "Aviso resuelto") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        when {
+                            alert != null -> Text(alert.detail)
+                            reviewKey == ReviewReminders.SUMMARY -> {
+                                if (alerts.isEmpty()) Text("No hay avisos pendientes.")
+                                alerts.forEach { item ->
+                                    TextButton(onClick = { selectReview(item.key) }) {
+                                        Text("${item.title}\n${item.detail}")
+                                    }
+                                }
+                            }
+                            reviewKey.startsWith("lot/") -> Text("Este lote ya no tiene una revisión pendiente.")
+                            else -> Text("Esta tarea ya no está pendiente para esa fecha.")
+                        }
+                    }
+                },
+                confirmButton = {
+                    alert?.task?.let { task ->
+                        TextButton(onClick = { dismiss(); model.completeTask(task.id) }) { Text("Marcar como hecha") }
+                    } ?: TextButton(onClick = dismiss) { Text("Cerrar") }
+                },
+                dismissButton = {
+                    if (alert?.task != null) TextButton(onClick = dismiss) { Text("Cerrar") }
+                },
+            )
+        }
     }
     LaunchedEffect(message) {
         message?.let {
@@ -422,7 +460,7 @@ private fun HomeScreen(
             Text("Nada vence en los próximos 60 días. Cargá lotes con fecha para seguirlos acá.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            state.expiringLots.forEachIndexed { index, (product, lot) ->
+            state.expiringLots.take(6).forEachIndexed { index, (product, lot) ->
                 if (index > 0) HorizontalDivider()
                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
                     horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -843,9 +881,10 @@ private fun ConsumeStockDialog(
     product: Product,
     onDismiss: () -> Unit,
     consume: (Long, Long) -> Unit,
+    focusLotId: Long? = null,
 ) {
-    val lots = state.productLots(product.id)
-    val suggested = state.suggestedLot(product.id)
+    val lots = state.productLots(product.id).filter { focusLotId == null || it.id == focusLotId }
+    val suggested = if (focusLotId == null) state.suggestedLot(product.id) else lots.firstOrNull()
     var selectedId by remember(product.id, suggested?.id) { mutableStateOf(suggested?.id) }
     var amount by remember(product.id, suggested?.id) {
         mutableStateOf(minOf(product.stepMilli, suggested?.quantityMilli ?: 0).asQuantity())
@@ -862,7 +901,7 @@ private fun ConsumeStockDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    "Elegí de cuál existencia descontar. Sugerimos la que vence o se rota antes.",
+                    if (focusLotId == null) "Elegí de cuál existencia descontar. Sugerimos la que vence o se rota antes." else "Lote indicado en el aviso.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 lots.forEach { lot ->
@@ -900,7 +939,7 @@ private fun ConsumeStockDialog(
                                             fontWeight = FontWeight.Bold,
                                         )
                                     }
-                                    if (isSuggested) StatusChip("Sugerida", Ok)
+                                    if (isSuggested && focusLotId == null) StatusChip("Sugerida", Ok)
                                 }
                                 Text(
                                     lot.date?.let { "${lot.dateKind.label}: ${it.format(dateFormat)}" }

@@ -182,7 +182,6 @@ internal data class PrepperState(
         .filter { it.quantityMilli > 0 && it.date != null && ChronoUnit.DAYS.between(today, it.date) <= 60 }
         .mapNotNull { lot -> visibleProducts.firstOrNull { it.id == lot.productId }?.let { it to lot } }
         .sortedBy { it.second.date }
-        .take(6)
         .toList()
 }
 
