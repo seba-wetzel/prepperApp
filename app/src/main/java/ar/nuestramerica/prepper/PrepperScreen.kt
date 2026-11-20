@@ -684,6 +684,7 @@ private fun PantryScreen(
             onDismiss = { selection = null },
             addLot = model::addLot,
             consume = model::consumeLot,
+            updateLot = model::updateLot,
             deleteLot = model::deleteLot,
             deleteProduct = model::deleteCustomProduct,
         )
@@ -788,43 +789,50 @@ private fun ProductLotsDialog(
     onDismiss: () -> Unit,
     addLot: (String, Long, LocalDate?, DateKind, String) -> Unit,
     consume: (Long, Long) -> Unit,
+    updateLot: (Long, Long, LocalDate?, DateKind, String) -> Unit,
     deleteLot: (Long) -> Unit,
     deleteProduct: (String) -> Unit,
 ) {
     when (initialAction) {
-        PantryAction.ADD -> AddStockDialog(product, onDismiss, addLot)
+        PantryAction.ADD -> StockDialog(product, onDismiss = onDismiss) { amount, date, kind, location ->
+            addLot(product.id, amount, date, kind, location)
+        }
         PantryAction.CONSUME -> ConsumeStockDialog(state, product, onDismiss, consume)
-        PantryAction.LOTS -> LotsDialog(state, product, onDismiss, deleteLot, deleteProduct)
+        PantryAction.LOTS -> LotsDialog(state, product, onDismiss, updateLot, deleteLot, deleteProduct)
     }
 }
 
 @Composable
-private fun AddStockDialog(
+private fun StockDialog(
     product: Product,
+    lot: StockLot? = null,
     onDismiss: () -> Unit,
-    addLot: (String, Long, LocalDate?, DateKind, String) -> Unit,
+    save: (Long, LocalDate?, DateKind, String) -> Unit,
 ) {
     val isWater = product.id == "agua"
-    val defaultDate = remember(product.id) {
-        product.defaultLotDate(LocalDate.now())?.format(dateFormat).orEmpty()
+    var amount by rememberSaveable(product.id, lot?.id) {
+        val quantity = lot?.quantityMilli ?: product.stepMilli
+        mutableStateOf(java.math.BigDecimal.valueOf(quantity, 3).stripTrailingZeros().toPlainString().replace('.', ','))
     }
-    var amount by remember(product.id) { mutableStateOf(product.stepMilli.asQuantity()) }
-    var date by remember(product.id) { mutableStateOf(defaultDate) }
-    var location by remember(product.id) { mutableStateOf("") }
-    var kind by remember(product.id) { mutableStateOf(product.defaultDateKind()) }
+    var date by rememberSaveable(product.id, lot?.id) {
+        val initial = if (lot == null) product.defaultLotDate(LocalDate.now()) else lot.date
+        mutableStateOf(initial?.format(dateFormat).orEmpty())
+    }
+    var location by rememberSaveable(product.id, lot?.id) { mutableStateOf(lot?.location.orEmpty()) }
+    var kind by rememberSaveable(product.id, lot?.id) { mutableStateOf(lot?.dateKind ?: product.defaultDateKind()) }
     val amountMilli = amount.toMilli()
     val parsedDate = date.parseDateOrNull()
     val validDate = (date.isBlank() || parsedDate != null)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Agregar ${product.name}") },
+        title = { Text(if (lot == null) "Agregar ${product.name}" else "Editar ${product.name} · ${lot.code}") },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(
+                if (lot == null) Text(
                     if (isWater) {
                         "Cargá los litros almacenados. La fecha de rotación se propone a 3 meses."
                     } else {
@@ -832,7 +840,7 @@ private fun AddStockDialog(
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Text(
+                if (lot == null) Text(
                     "Al guardar te daremos un código corto para marcar e identificar este envase.",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
@@ -873,12 +881,12 @@ private fun AddStockDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    addLot(product.id, amountMilli, parsedDate, kind, location)
+                    save(amountMilli, parsedDate, kind, location)
                     onDismiss()
                 },
                 enabled = amountMilli > 0 && validDate,
             ) {
-                Text("Agregar")
+                Text(if (lot == null) "Agregar" else "Guardar cambios")
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
@@ -994,9 +1002,18 @@ private fun LotsDialog(
     state: PrepperState,
     product: Product,
     onDismiss: () -> Unit,
+    updateLot: (Long, Long, LocalDate?, DateKind, String) -> Unit,
     deleteLot: (Long) -> Unit,
     deleteProduct: (String) -> Unit,
 ) {
+    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val editingLot = state.lots.firstOrNull { it.id == editingId && it.productId == product.id }
+    if (editingLot != null) {
+        StockDialog(product, editingLot, onDismiss = { editingId = null }) { amount, date, kind, location ->
+            updateLot(editingLot.id, amount, date, kind, location)
+        }
+        return
+    }
     var deleteId by remember { mutableStateOf<Long?>(null) }
     var confirmProductDelete by remember { mutableStateOf(false) }
     val lots = state.productLots(product.id)
@@ -1034,7 +1051,10 @@ private fun LotsDialog(
                                     ?: "Fecha no informada",
                             )
                             if (lot.location.isNotBlank()) Text("Ubicación: ${lot.location}")
-                            TextButton(onClick = { deleteId = lot.id }) { Text("Eliminar") }
+                            Row {
+                                TextButton(onClick = { editingId = lot.id }) { Text("Editar") }
+                                TextButton(onClick = { deleteId = lot.id }) { Text("Eliminar") }
+                            }
                         }
                     }
                 }

@@ -47,6 +47,13 @@ internal class PrepperViewModel(application: Application) : AndroidViewModel(app
         repository.load()
     }
 
+    fun updateLot(id: Long, quantityMilli: Long, date: LocalDate?, kind: DateKind, location: String) =
+        run("Existencia actualizada") {
+            repository.updateLot(id, quantityMilli, date, kind, location)
+            ReviewReminders.checkNow(getApplication())
+            repository.load()
+        }
+
     fun deleteLot(id: Long) = run("Lote eliminado") {
         repository.deleteLot(id)
         repository.load()

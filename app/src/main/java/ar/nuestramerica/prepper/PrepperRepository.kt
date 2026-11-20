@@ -197,6 +197,20 @@ internal class PrepperRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    fun updateLot(id: Long, quantityMilli: Long, date: LocalDate?, kind: DateKind, location: String) {
+        require(quantityMilli > 0)
+        val values = ContentValues().apply {
+            put("quantity_milli", quantityMilli)
+            put("local_date", date?.toString())
+            put("date_kind", kind.name)
+            put("location", location.trim())
+        }
+        check(writableDatabase.update("lot", values, "id=? AND quantity_milli>0", arrayOf(id.toString())) == 1) {
+            "La existencia ya no está disponible"
+        }
+    }
+
+    @Synchronized
     fun deleteLot(id: Long) {
         writableDatabase.delete("lot", "id=?", arrayOf(id.toString()))
     }
