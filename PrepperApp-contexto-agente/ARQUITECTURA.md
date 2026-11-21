@@ -20,7 +20,10 @@ No hay Room, Hilt, Retrofit, Firebase, DataStore ni servicios de red.
 | Archivo | Responsabilidad |
 | --- | --- |
 | `MainActivity.kt` | Integración Android: permisos, intents, compartir, SAF, marcador y composición raíz |
-| `PrepperScreen.kt` | Toda la UI Compose y navegación interna de cuatro secciones |
+| `app/PrepperApp.kt` | Composición raíz y navegación entre secciones |
+| `inicio/`, `despensa/`, `tareas/`, `ajustes/`, `onboarding/` | Pantallas y componentes propios de cada funcionalidad |
+| `ui/components/`, `ui/format/` | Componentes compartidos y formato de entradas |
+| `avisos/ReviewReminders.kt` | Selección de avisos, programación, canal y notificaciones |
 | `PrepperModels.kt` | Modelos, cálculos, fechas y formateo |
 | `PrepperViewModel.kt` | Estado observable, operaciones asíncronas y mensajes de UI |
 | `PrepperRepository.kt` | SQLite, semillas, mutaciones y backup JSON |

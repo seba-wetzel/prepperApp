@@ -8,13 +8,19 @@ Prepper App ayuda a organizar las reservas de un hogar. Permite saber cuánta ag
 
 En el primer inicio elegís cuántas personas viven en casa y cuántas semanas querés cubrir. **Inicio** muestra la autonomía estimada, los faltantes y los próximos vencimientos. También da acceso a números de emergencia de Argentina. **Despensa** permite cargar y consumir existencias, consultar sus fechas y compartir la lista de compras. En **Tareas** registrás las revisiones periódicas. Desde **Ajustes** podés adaptar el catálogo de alimentos, cambiar las metas y exportar o restaurar una copia.
 
+## Dónde encontrar la interfaz
+
+La [raíz de Compose](app/src/main/java/ar/nuestramerica/prepper/app/PrepperApp.kt) elige la sección activa y conecta las acciones de navegación. Las pantallas viven en [inicio](app/src/main/java/ar/nuestramerica/prepper/inicio), [despensa](app/src/main/java/ar/nuestramerica/prepper/despensa), [tareas](app/src/main/java/ar/nuestramerica/prepper/tareas), [ajustes](app/src/main/java/ar/nuestramerica/prepper/ajustes) y [onboarding](app/src/main/java/ar/nuestramerica/prepper/onboarding). Los componentes propios de un flujo se guardan junto a su pantalla, como el editor de lotes en Despensa.
+
+Antes de crear una tarjeta, etiqueta o campo nuevo, revisá [ui/components](app/src/main/java/ar/nuestramerica/prepper/ui/components). Cada componente compartido tiene su propio archivo. Por ejemplo, `SummaryCard` recibe título, subtítulo, contador y acción; la pantalla que la usa decide qué mostrar y adónde navegar.
+
 ## Qué ocurre al guardar un lote
 
 Supongamos que ya tenés una lata de atún y agregás otras dos con distinto vencimiento. La app conserva las dos cargas por separado aunque las sume en la misma tarjeta de producto.
 
 1. El formulario envía la cantidad, la fecha opcional, el tipo de fecha y la ubicación al [ViewModel](app/src/main/java/ar/nuestramerica/prepper/PrepperViewModel.kt). Una corrutina ejecuta la operación de disco en `Dispatchers.IO`.
 2. El [repositorio](app/src/main/java/ar/nuestramerica/prepper/PrepperRepository.kt) usa `SQLiteOpenHelper` para insertar una fila en la tabla `lot`, vinculada al producto. Guarda la cantidad como entero en milésimas (0,5 kg se guarda como 500) y genera un código como `LA02` para que puedas anotarlo en el envase.
-3. Después de escribir, el repositorio vuelve a leer ajustes, productos, lotes, tareas e historial. El ViewModel publica ese conjunto como `StateFlow<PrepperState>`. La [interfaz Compose](app/src/main/java/ar/nuestramerica/prepper/PrepperScreen.kt) observa el estado y actualiza la tarjeta, el total de la despensa y la lista de compras.
+3. Después de escribir, el repositorio vuelve a leer ajustes, productos, lotes, tareas e historial. El ViewModel publica ese conjunto como `StateFlow<PrepperState>`. La [interfaz Compose](app/src/main/java/ar/nuestramerica/prepper/app/PrepperApp.kt) observa el estado y actualiza la tarjeta, el total de la despensa y la lista de compras.
 4. Al consumir, la app sugiere el lote utilizable con la fecha más cercana y deja los lotes sin fecha al final. Podés elegir otro. El repositorio verifica la cantidad disponible y descuenta del ID elegido. Si completás una fecha desde **Ver existencias → Editar**, actualiza esa misma fila y conserva el código.
 
 ## Cómo se calculan los indicadores

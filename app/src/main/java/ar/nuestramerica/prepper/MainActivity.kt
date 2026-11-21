@@ -1,5 +1,8 @@
 package ar.nuestramerica.prepper
 
+import ar.nuestramerica.prepper.app.PrepperApp
+import ar.nuestramerica.prepper.avisos.ReviewReminders
+
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent

@@ -44,7 +44,7 @@ No usar las diapositivas completas como contenido final sin esta etapa.
 
 ## Calidad de producto
 
-- Separar `PrepperScreen.kt` por pantalla cuando el cambio reduzca complejidad sin alterar comportamiento.
+- Completado: pantallas separadas por funcionalidad y componentes compartidos en `ui/components/`.
 - Considerar Room solo con plan de migración y pruebas.
 - Añadir pruebas UI críticas.
 - Revisar modo oscuro específico para la nueva identidad.

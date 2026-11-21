@@ -1,5 +1,7 @@
 package ar.nuestramerica.prepper
 
+import ar.nuestramerica.prepper.avisos.ReviewReminders
+
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope

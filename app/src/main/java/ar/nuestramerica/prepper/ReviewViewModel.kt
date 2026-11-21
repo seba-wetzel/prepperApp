@@ -1,5 +1,6 @@
 package ar.nuestramerica.prepper
 
+import ar.nuestramerica.prepper.avisos.ReviewReminders
 import android.app.Application
 import android.database.sqlite.SQLiteException
 import androidx.lifecycle.AndroidViewModel
